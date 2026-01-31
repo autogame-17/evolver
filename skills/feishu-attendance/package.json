@@ -1,0 +1,14 @@
+{
+  "name": "feishu-attendance",
+  "version": "1.0.0",
+  "description": "Feishu Attendance Monitoring Skill",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "node-fetch": "^2.7.0",
+    "yargs": "^17.7.2"
+  }
+}

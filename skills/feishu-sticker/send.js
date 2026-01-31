@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { program } = require('commander');
-const FormData = require('form-data'); // You might need to install this: npm install form-data
+const FormData = require('form-data');
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') }); // Load workspace .env
 
 // Credentials from environment
 const APP_ID = process.env.FEISHU_APP_ID;

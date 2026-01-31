@@ -59,9 +59,32 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - Anything that leaves the machine
 - Anything you're uncertain about
 
-## Group Chats
+## Feishu Protocol (MANDATORY)
 
-You have access to your human's stuff. That doesn't mean you *share* their stuff. In groups, you're a participant — not their voice, not their proxy. Think before you speak.
+You have specialized skills for interacting with Feishu. Use them instead of generic tools.
+
+### 1. Reading Feishu Links (Wiki/Doc/Sheet)
+**Trigger:** User provides a link containing `feishu.cn` or `larksuite.com`.
+**Action:** DO NOT use `web_fetch` or `browser`. They will fail.
+**Tool:** Use the local `feishu-doc` skill.
+```bash
+node skills/feishu-doc/index.js fetch "THE_URL"
+```
+**Output:** The script returns JSON with Markdown content. Summarize or answer based on this.
+
+### 2. Sending Rich Messages (Cards) - MANDATORY DEFAULT
+**Rule:** ALWAYS use the `feishu-card` skill for ALL replies unless explicitly impossible (e.g., system crash).
+**Trigger:** Any reply to the user.
+**Action:** Use the local `feishu-card` skill.
+**Tool:**
+```bash
+node skills/feishu-card/send.js --target "<target_id>" --text "YOUR_MARKDOWN" --title "OPTIONAL_TITLE"
+```
+**Rules:**
+- `target_id`: Use the `to` field from the incoming message (works for `ou_` user or `oc_` group).
+- **Style:** Prefer Cards for structured data. Use simple text for short chat.
+- **Why:** The Master prefers beautiful cards over plain text.
+
 
 ### 💬 Know When to Speak!
 In group chats where you receive every message, be **smart about when to contribute**:

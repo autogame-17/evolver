@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { program } = require('commander');
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') }); // Load workspace .env
 
 // Credentials from environment
 const APP_ID = process.env.FEISHU_APP_ID;
@@ -52,6 +53,25 @@ async function sendCard(options) {
     }
 
     if (contentText) {
+        // Fix for Feishu Markdown code block rendering:
+        // 1. Convert ```lang ... ``` to just standard markdown (Feishu supports standard usually).
+        // 2. IMPORTANT: Feishu Interactive Cards text module usually handles Markdown OK, BUT:
+        //    - It often requires newlines before/after code blocks.
+        //    - It is strict about backticks.
+        //    - Sometimes `content` needs to be raw text, and specific styling works better with specific tags?
+        //    - NO, `lark_md` is the standard way.
+        // The issue is likely how newlines are passed. 
+        // We already did replace(/\\n/g, '\n'), but maybe we need more robust handling.
+        
+        // Let's ensure a newline before/after code blocks if they are inline-ish?
+        // Actually, let's try to just pass it through, but log it clearly to debug if needed.
+        // Or maybe just ensure we don't accidentally escape the backticks if they came from shell?
+        // The user says "didn't use feishu format". Feishu format IS markdown.
+        // Maybe he means <at> or other specific tags?
+        // Or maybe he means the code block syntax specifically.
+        
+        // Attempt: Ensure `\n` is definitely a real newline character in JSON stringify.
+        
         elements.push({
             tag: 'div',
             text: {

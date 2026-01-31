@@ -1,0 +1,76 @@
+const fetch = require('node-fetch');
+const fs = require('fs');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') }); // Attempt to load from workspace root if running from deep nested path, or adjust relative path.
+// Adjusting path: auth.js is in lib/, so __dirname is .../skills/feishu-doc/lib
+// ../../.env would be .../skills/feishu-doc/.env
+// ../../../.env would be .../skills/.env
+// ../../../../.env would be .../.env (workspace root)
+// Actually, let's just try standard path relative to workspace root which is usually CWD.
+// Better: try multiple paths or just the one that works for feishu-card.
+// feishu-card is in skills/feishu-card/send.js. Root is ../../.env
+// feishu-doc/lib/auth.js is one level deeper. So ../../../.env
+
+try {
+  require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
+} catch (e) {
+  // ignore
+}
+
+let tokenCache = {
+  token: null,
+  expireTime: 0
+};
+
+function loadConfig() {
+  const configPath = path.join(__dirname, '../config.json');
+  let config = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (e) {
+      console.error("Failed to parse config.json");
+    }
+  }
+  
+  return {
+    app_id: process.env.FEISHU_APP_ID || config.app_id,
+    app_secret: process.env.FEISHU_APP_SECRET || config.app_secret
+  };
+}
+
+async function getTenantAccessToken() {
+  const now = Date.now() / 1000;
+  if (tokenCache.token && tokenCache.expireTime > now) {
+    return tokenCache.token;
+  }
+
+  const config = loadConfig();
+  if (!config.app_id || !config.app_secret) {
+    throw new Error("Missing app_id or app_secret. Please set FEISHU_APP_ID and FEISHU_APP_SECRET environment variables or create a config.json file.");
+  }
+
+  const response = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      "app_id": config.app_id,
+      "app_secret": config.app_secret
+    })
+  });
+
+  const data = await response.json();
+
+  if (data.code !== 0) {
+    throw new Error(`Failed to get tenant_access_token: ${data.msg}`);
+  }
+
+  tokenCache.token = data.tenant_access_token;
+  tokenCache.expireTime = now + data.expire - 60; // Refresh 1 minute early
+
+  return tokenCache.token;
+}
+
+module.exports = {
+  getTenantAccessToken
+};
