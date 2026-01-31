@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { margin: 0; padding: 0; background: #f0f8ff; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Comic Sans MS', cursive, sans-serif; }
+  canvas { border: 8px solid #8b4513; border-radius: 20px; background: #fff; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+</style>
+</head>
+<body>
+<canvas id="canvas" width="512" height="512"></canvas>
+<script>
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Background - Grass
+  ctx.fillStyle = "#e0ffe0";
+  ctx.fillRect(0, 0, 512, 512);
+
+  function drawOval(x, y, w, h, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Tail (Wagging!)
+  ctx.strokeStyle = "#d2b48c";
+  ctx.lineWidth = 15;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(350, 320);
+  ctx.quadraticCurveTo(400, 280, 420, 300);
+  ctx.stroke();
+
+  // Body
+  drawOval(256, 350, 100, 80, "#d2b48c"); // Main body
+
+  // Legs
+  drawOval(190, 410, 20, 30, "#d2b48c"); // Front L
+  drawOval(320, 410, 20, 30, "#d2b48c"); // Front R
+  drawOval(220, 420, 20, 30, "#c19a6b"); // Back L
+  drawOval(290, 420, 20, 30, "#c19a6b"); // Back R
+
+  // Head
+  drawOval(256, 230, 90, 80, "#d2b48c"); // Head base
+
+  // Ears (Floppy)
+  ctx.fillStyle = "#8b4513";
+  ctx.beginPath();
+  ctx.ellipse(170, 240, 30, 60, 0.3, 0, Math.PI * 2); // Left Ear
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(342, 240, 30, 60, -0.3, 0, Math.PI * 2); // Right Ear
+  ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.arc(226, 210, 10, 0, Math.PI * 2); // L
+  ctx.arc(286, 210, 10, 0, Math.PI * 2); // R
+  ctx.fill();
+  
+  // Shine in eyes
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(222, 206, 3, 0, Math.PI * 2);
+  ctx.arc(282, 206, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Nose
+  ctx.fillStyle = "#3e2723";
+  drawOval(256, 240, 12, 8, "#3e2723");
+
+  // Mouth
+  ctx.strokeStyle = "#3e2723";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(256, 255, 10, 0, Math.PI, false); // Smile
+  ctx.stroke();
+
+  // Tongue
+  ctx.fillStyle = "#ff69b4";
+  ctx.beginPath();
+  ctx.arc(262, 260, 6, 0, Math.PI, false);
+  ctx.fill();
+
+  // Collar
+  ctx.fillStyle = "#ff0000";
+  ctx.fillRect(210, 290, 92, 15);
+  ctx.fillStyle = "gold";
+  ctx.beginPath();
+  ctx.arc(256, 305, 8, 0, Math.PI * 2); // Tag
+  ctx.fill();
+
+  // Text
+  ctx.fillStyle = "#555";
+  ctx.font = "bold 24px Comic Sans MS";
+  ctx.textAlign = "center";
+  ctx.fillText("汪汪！(Woof!)", 256, 120);
+  
+  ctx.fillStyle = "#888";
+  ctx.font = "16px Arial";
+  ctx.fillText("Art by 小虾 🐾", 420, 480);
+</script>
+</body>
+</html>

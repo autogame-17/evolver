@@ -1,0 +1,10 @@
+{
+  "amp.mcpServers": {
+    "brv": {
+      "command": "brv",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

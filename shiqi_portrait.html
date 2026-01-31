@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { margin: 0; padding: 0; background: #1a0505; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: sans-serif; }
+  canvas { border: 4px solid #ff4444; background: #fff; box-shadow: 0 0 20px #ff0000; }
+</style>
+</head>
+<body>
+<canvas id="canvas" width="512" height="512"></canvas>
+<script>
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = "#fff0f5";
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Stick figure body
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(256, 200); // Head bottom
+  ctx.lineTo(256, 350); // Body
+  ctx.lineTo(200, 450); // Left Leg
+  ctx.moveTo(256, 350);
+  ctx.lineTo(312, 450); // Right Leg
+  ctx.moveTo(256, 250);
+  ctx.lineTo(180, 200); // Left Arm (holding sword?)
+  ctx.moveTo(256, 250);
+  ctx.lineTo(332, 200); // Right Arm
+  ctx.stroke();
+
+  // Head
+  ctx.beginPath();
+  ctx.arc(256, 160, 40, 0, Math.PI * 2); // Head
+  ctx.stroke();
+  
+  // Face
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.arc(240, 150, 5, 0, Math.PI * 2); // Eye L
+  ctx.arc(272, 150, 5, 0, Math.PI * 2); // Eye R
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(256, 170, 15, 0, Math.PI, false); // Smile
+  ctx.stroke();
+
+  // Horns (Demon King)
+  ctx.fillStyle = "#ff0000";
+  ctx.beginPath();
+  ctx.moveTo(230, 130);
+  ctx.lineTo(220, 80);
+  ctx.lineTo(245, 125);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(282, 130);
+  ctx.lineTo(292, 80);
+  ctx.lineTo(267, 125);
+  ctx.fill();
+
+  // Cape
+  ctx.fillStyle = "rgba(255, 0, 0, 0.6)";
+  ctx.beginPath();
+  ctx.moveTo(230, 250);
+  ctx.lineTo(150, 400);
+  ctx.lineTo(362, 400);
+  ctx.lineTo(282, 250);
+  ctx.fill();
+
+  // Text
+  ctx.fillStyle = "#333";
+  ctx.font = "bold 30px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("诗琪大魔王", 256, 40);
+  
+  ctx.fillStyle = "#ff69b4";
+  ctx.font = "italic 20px Arial";
+  ctx.fillText("By 小虾 🐾", 400, 480);
+</script>
+</body>
+</html>
