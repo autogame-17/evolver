@@ -20,11 +20,11 @@ A system for tracking, analyzing, and promoting ad-hoc workflows into formalized
 4.  **Integration**: Add to `openclaw.json` or `MEMORY.md` as preferred method.
 
 ## Current Candidates (Auto-Captured)
-- [x] **Feishu Rich Text Cards**: Promoted to `skills/feishu-card`.
-- [x] **Feishu Stickers**: Promoted to `skills/feishu-sticker`.
+- [x] **Rich Text Cards**: Promoted to `skills/feishu-card`.
+- [x] **Expressive Stickers**: Promoted to `skills/feishu-sticker`.
 - [x] **Sticker Analysis**: Promoted to `skills/sticker-analyzer`.
 - [x] **Memory Management**: Promoted to `skills/memory-manager`.
-- [ ] **Log Archiver**: The `logger.js` pattern used for `zhy` and `fmw` could be a generic `interaction-logger` skill.
+- [ ] **Log Archiver**: The `logger.js` pattern used for various personas could be a generic `interaction-logger` skill.
 
 ## Next Steps
 - Monitor usage of `logger.js`. If used again for a 3rd persona, promote to `skills/interaction-logger`.

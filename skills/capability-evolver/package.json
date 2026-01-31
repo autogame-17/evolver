@@ -1,0 +1,17 @@
+{
+  "name": "capability-evolver",
+  "version": "1.0.0",
+  "description": "Analyzes usage patterns to suggest and generate new skills from ad-hoc workflows.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "openclaw",
+    "meta",
+    "evolution"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {}
+}

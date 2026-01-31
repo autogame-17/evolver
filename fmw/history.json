@@ -38,5 +38,15 @@
     "role": "assistant",
     "content": "**System Diagnostic Report** Host: clawdbot-n2d-instance. Kernel: Linux 6.1.0-42-cloud-amd64 (x86_64). OS: Debian GNU/Linux 12 (bookworm). Runtime: Node.js v22.22.0. Uptime: 13h 22m. Load: 0.10, 0.11, 0.04. Report generated per Big Brother request. Logging to fmw/history.json.",
     "timestamp": "2026-01-31T15:12:20.381Z"
+  },
+  {
+    "role": "user",
+    "content": "表情包图片呢！",
+    "timestamp": "2026-01-31T21:31:05.000Z"
+  },
+  {
+    "role": "assistant",
+    "content": "Image asset re-transmitted. File: salute_v2.jpg. Delivery confirmed.",
+    "timestamp": "2026-01-31T21:31:10.000Z"
   }
 ]
