@@ -11,6 +11,7 @@ fi
 
 MSG="${1:-Auto-sync: Routine evolution update}"
 REPO_DIR="/home/crishaocredits/.openclaw/workspace"
+TIMEOUT_CMD="timeout 120s"
 
 # Ensure we are in the correct directory
 cd "$REPO_DIR" || { echo "Failed to cd to $REPO_DIR"; exit 1; }
@@ -51,7 +52,7 @@ fi
 
 # 3. Fetch & Check Sync Status
 # Fetch specific branch to save bandwidth/time
-git fetch origin "$CURRENT_BRANCH" >/dev/null 2>&1
+$TIMEOUT_CMD git fetch origin "$CURRENT_BRANCH" >/dev/null 2>&1
 
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse "origin/$CURRENT_BRANCH" 2>/dev/null || echo "")
@@ -63,12 +64,12 @@ fi
 
 # 4. Pull & Rebase (Safety First)
 # echo "Syncing with remote..."
-if ! git pull --rebase origin "$CURRENT_BRANCH" >/dev/null 2>&1; then
+if ! $TIMEOUT_CMD git pull --rebase origin "$CURRENT_BRANCH" >/dev/null 2>&1; then
   echo "⚠️ Rebase failed. Aborting rebase and attempting standard merge..."
   git rebase --abort 2>/dev/null || true
   
   # Fallback to Merge strategy
-  if ! git pull --no-rebase origin "$CURRENT_BRANCH"; then
+  if ! $TIMEOUT_CMD git pull --no-rebase origin "$CURRENT_BRANCH"; then
       echo "❌ Sync (Merge) failed: Manual intervention required."
       exit 1
   else
@@ -82,7 +83,7 @@ COUNT=0
 SUCCESS=0
 
 while [ $COUNT -lt $MAX_RETRIES ]; do
-  if OUT=$(git push origin "$CURRENT_BRANCH" 2>&1); then
+  if OUT=$($TIMEOUT_CMD git push origin "$CURRENT_BRANCH" 2>&1); then
     echo "Push successful."
     SUCCESS=1
     break
