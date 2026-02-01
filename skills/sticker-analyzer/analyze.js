@@ -25,6 +25,11 @@ if (!API_KEY) {
 }
 
 const STICKER_DIR = process.env.STICKER_DIR || "/home/crishaocredits/.openclaw/media/stickers";
+if (!fs.existsSync(STICKER_DIR)) {
+    console.log(`Creating sticker directory: ${STICKER_DIR}`);
+    fs.mkdirSync(STICKER_DIR, { recursive: true });
+}
+
 const TRASH_DIR = path.join(STICKER_DIR, "trash");
 const INDEX_FILE = path.join(STICKER_DIR, 'index.json');
 
@@ -35,7 +40,9 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
-const CONCURRENCY = 3;
+// Stability Tuning: Reduced concurrency and increased delay to prevent Rate Limit (429) errors
+const CONCURRENCY = 2;
+const BATCH_DELAY_MS = 4000;
 
 if (!fs.existsSync(TRASH_DIR)) fs.mkdirSync(TRASH_DIR, { recursive: true });
 
@@ -229,7 +236,7 @@ async function run() {
       
       if (results.some(Boolean)) saveIndex(index);
       // Rate limit protection
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
   }
   
   console.log("Done.");
