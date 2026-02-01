@@ -16,6 +16,7 @@ program
   .argument('<file>', 'Path to the PDF file')
   .option('-o, --output <file>', 'Output file path (default: print to stdout)')
   .option('--max-pages <number>', 'Maximum number of pages to parse (for large files)')
+  .option('--json', 'Output as JSON with metadata')
   .action(async (file, options) => {
     try {
       const dataBuffer = fs.readFileSync(file);
@@ -27,11 +28,26 @@ program
       
       const data = await pdf(dataBuffer, parseOptions);
       
-      if (options.output) {
-        fs.writeFileSync(options.output, data.text);
-        console.log(`Text extracted to ${options.output}`);
+      if (options.json) {
+          const result = {
+              text: data.text,
+              pages: data.numpages,
+              info: data.info,
+              metadata: data.metadata
+          };
+          if (options.output) {
+              fs.writeFileSync(options.output, JSON.stringify(result, null, 2));
+              console.log(`JSON extracted to ${options.output}`);
+          } else {
+              console.log(JSON.stringify(result, null, 2));
+          }
       } else {
-        console.log(data.text);
+          if (options.output) {
+            fs.writeFileSync(options.output, data.text);
+            console.log(`Text extracted to ${options.output}`);
+          } else {
+            console.log(data.text);
+          }
       }
     } catch (error) {
       console.error('Error extracting text:', error.message);
