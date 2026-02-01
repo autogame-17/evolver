@@ -180,6 +180,7 @@ const STATE_FILE = path.join(MEMORY_DIR, 'evolution_state.json');
 const ROOT_MEMORY = path.resolve(__dirname, '../../MEMORY.md');
 const DIR_MEMORY = path.join(MEMORY_DIR, 'MEMORY.md');
 const MEMORY_FILE = fs.existsSync(ROOT_MEMORY) ? ROOT_MEMORY : DIR_MEMORY;
+const USER_FILE = path.resolve(__dirname, '../../USER.md');
 
 function readMemorySnippet() {
     try {
@@ -188,6 +189,15 @@ function readMemorySnippet() {
         return content.length > 2000 ? content.slice(0, 2000) + '... (truncated)' : content;
     } catch (e) {
         return '[ERROR READING MEMORY.md]';
+    }
+}
+
+function readUserSnippet() {
+    try {
+        if (!fs.existsSync(USER_FILE)) return '[USER.md MISSING]';
+        return fs.readFileSync(USER_FILE, 'utf8');
+    } catch (e) {
+        return '[ERROR READING USER.md]';
     }
 }
 
@@ -215,6 +225,7 @@ async function run() {
     let recentMasterLog = readRealSessionLog();
     let todayLog = readRecentLog(TODAY_LOG);
     let memorySnippet = readMemorySnippet();
+    let userSnippet = readUserSnippet();
     
     const cycleNum = getNextCycleId();
     const cycleId = `Cycle #${cycleNum}`;
@@ -319,6 +330,11 @@ ${fileList}
 ${memorySnippet}
 \`\`\`
 
+**CONTEXT [User Registry (USER.md)]**:
+\`\`\`
+${userSnippet}
+\`\`\`
+
 **CONTEXT [Recent Memory Snippet]**:
 \`\`\`
 ${todayLog.slice(-3000)}
@@ -343,6 +359,7 @@ ${mutation}
     - **Mode B (Optimize)**: Refactor code.
     - **Mode C (Expand)**: Create a tool.
     - **Mode D (Innovation)**: (If Mutation Active) Solve a recurring problem in a new way.
+    - **Mode E (Personalization)**: 💡 **CRITICAL**: If `USER.md` or `MEMORY.md` is provided, analyze them to adapt to specific user needs. (e.g., if a user prefers JSON output, create tools that output JSON. If a user is a developer, prioritize robust error handling.)
 
 ${reportingDirective}
 
