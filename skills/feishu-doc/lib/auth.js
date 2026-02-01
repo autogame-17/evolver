@@ -65,36 +65,55 @@ async function getTenantAccessToken() {
     throw new Error("Missing app_id or app_secret. Please set FEISHU_APP_ID and FEISHU_APP_SECRET environment variables or create a config.json file.");
   }
 
-  const response = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      "app_id": config.app_id,
-      "app_secret": config.app_secret
-    })
-  });
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          "app_id": config.app_id,
+          "app_secret": config.app_secret
+        }),
+        timeout: 5000 // 5s timeout
+      });
 
-  const data = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-  if (data.code !== 0) {
-    throw new Error(`Failed to get tenant_access_token: ${data.msg}`);
-  }
+      const data = await response.json();
 
-  tokenCache.token = data.tenant_access_token;
-  tokenCache.expireTime = now + data.expire - 60; // Refresh 1 minute early
+      if (data.code !== 0) {
+        throw new Error(`Failed to get tenant_access_token: ${data.msg}`);
+      }
 
-  // Persist to disk
-  try {
-    const cacheDir = path.dirname(TOKEN_CACHE_FILE);
-    if (!fs.existsSync(cacheDir)) {
-      fs.mkdirSync(cacheDir, { recursive: true });
+      tokenCache.token = data.tenant_access_token;
+      tokenCache.expireTime = now + data.expire - 60; // Refresh 1 minute early
+
+      // Persist to disk
+      try {
+        const cacheDir = path.dirname(TOKEN_CACHE_FILE);
+        if (!fs.existsSync(cacheDir)) {
+          fs.mkdirSync(cacheDir, { recursive: true });
+        }
+        fs.writeFileSync(TOKEN_CACHE_FILE, JSON.stringify(tokenCache));
+      } catch (e) {
+        console.error("Failed to save token cache:", e.message);
+      }
+
+      return tokenCache.token;
+
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        const delay = 1000 * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-    fs.writeFileSync(TOKEN_CACHE_FILE, JSON.stringify(tokenCache));
-  } catch (e) {
-    console.error("Failed to save token cache:", e.message);
   }
 
-  return tokenCache.token;
+  throw lastError || new Error("Failed to retrieve access token after retries");
 }
 
 module.exports = {
