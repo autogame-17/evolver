@@ -75,13 +75,13 @@ function sendFeedback(targetId, title, text, color = 'blue') {
         const scriptPath = getSkillScript('feishu-card', 'send.js');
         if (!scriptPath) return;
 
-        const tempFile = path.join(MEMORY_DIR, `temp_gateway_reply_${Date.now()}.md`);
-        if (!fs.existsSync(MEMORY_DIR)) fs.mkdirSync(MEMORY_DIR, { recursive: true });
-        
-        fs.writeFileSync(tempFile, text);
-        const cmd = `node "${scriptPath}" --target "${targetId}" --text-file "${tempFile}" --title "${title}" --color "${color}"`;
-        execSync(cmd, { stdio: 'ignore', cwd: WORKSPACE_ROOT });
-        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+        // Optimization: Use stdin instead of temp file
+        const cmd = `node "${scriptPath}" --target "${targetId}" --title "${title}" --color "${color}"`;
+        execSync(cmd, { 
+            input: text,
+            stdio: ['pipe', 'ignore', 'ignore'], // pipe stdin, ignore stdout/stderr
+            cwd: WORKSPACE_ROOT 
+        });
     } catch (e) {
         console.error(`[GatewayManager] Feedback failed: ${e.message}`);
     }

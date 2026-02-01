@@ -103,7 +103,8 @@ function sendNotification(papers, target) {
         console.error(`[ArXiv] Sending notification to ${target}...`);
         
         // Spawn detached process to send card
-        const child = spawn('node', [
+        // Use process.execPath to ensure we use the same Node binary
+        const child = spawn(process.execPath, [
             cardPath, 
             '--target', target, 
             '--text', text, 

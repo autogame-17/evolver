@@ -1,6 +1,6 @@
 {
   "name": "gateway-manager",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Handles administrative menu events from Feishu to manage the OpenClaw Gateway service.",
   "main": "handle_menu.js",
   "scripts": {
