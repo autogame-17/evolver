@@ -37,6 +37,12 @@ function detectMime(filePath) {
         // PDF (%PDF)
         if (hex.startsWith('25504446')) return 'application/pdf';
 
+        // ZIP (PK..)
+        if (hex.startsWith('504B0304')) return 'application/zip';
+
+        // GZIP
+        if (hex.startsWith('1F8B')) return 'application/gzip';
+
         return null; // Unknown
     } catch (err) {
         // Return null on read error so main script handles it (or logging elsewhere)

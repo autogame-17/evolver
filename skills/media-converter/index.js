@@ -25,7 +25,9 @@ const MIME_TO_EXT = {
     'image/gif': 'gif',
     'image/webp': 'webp',
     'video/mp4': 'mp4',
-    'application/pdf': 'pdf'
+    'application/pdf': 'pdf',
+    'application/zip': 'zip',
+    'application/gzip': 'gz'
 };
 
 try {

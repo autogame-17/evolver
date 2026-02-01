@@ -1,0 +1,13 @@
+{
+  "name": "prompt-optimizer",
+  "version": "1.0.0",
+  "description": "Evaluate, optimize, and enhance prompts using 58 proven prompting techniques.",
+  "keywords": [
+    "prompt-engineering",
+    "optimization",
+    "ai",
+    "llm"
+  ],
+  "author": "OpenClaw Agent",
+  "license": "MIT"
+}

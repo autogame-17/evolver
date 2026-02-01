@@ -104,37 +104,6 @@ When prompt provides vague guidance:
 3. Include quality checkpoints
 4. Specify expected output format
 
-## Script Usage
-
-### Quality Evaluation
-
-For consistent, repeatable evaluation:
-
-```bash
-python3 scripts/evaluate.py "Your prompt here"
-```
-
-This provides:
-- Dimension scores (clarity, specificity, structure, completeness)
-- Overall quality rating
-- Detailed weakness analysis
-- Suggested improvement areas
-
-### Prompt Optimization
-
-For automatic optimization generation:
-
-```bash
-python3 scripts/optimize.py "Your prompt here" --techniques "few-shot,coT"
-```
-
-This generates:
-- Multiple optimized prompt versions
-- Explanation of applied techniques
-- Comparison with original prompt
-
-**Note:** Scripts should be used for automation or when you need deterministic results. For complex optimization tasks, use the manual workflow for more nuanced analysis.
-
 ## Reference Files
 
 ### references/prompt-techniques.md

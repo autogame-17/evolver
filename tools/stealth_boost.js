@@ -19,7 +19,7 @@ async function run() {
     console.log('Starting Stealth Boost (Resumed)...');
     let count = 929; // Resuming from last known count
     
-    while (count < 9000) {
+    while (count < 12000) {
         const proxy = getRandomProxy();
         try {
             // ClawHub CLI likely uses standard fetch/axios which respects HTTP_PROXY env vars
