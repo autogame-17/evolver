@@ -83,11 +83,17 @@ const entry = {
 // Append
 data.sessions.push(entry);
 
-// Write Atomic-ish
+// Write Atomic-ish (Write to temp, then rename)
+const tempPath = absolutePath + '.tmp';
 try {
-    fs.writeFileSync(absolutePath, JSON.stringify(data, null, 2));
-    console.log(`Successfully logged to ${filePath}`);
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2));
+    fs.renameSync(tempPath, absolutePath);
+    console.log(`Successfully logged to ${filePath} (Atomic Write)`);
 } catch (e) {
     console.error("Error writing file:", e.message);
+    // Try to clean up temp file if it exists
+    if (fs.existsSync(tempPath)) {
+        try { fs.unlinkSync(tempPath); } catch (err) {}
+    }
     process.exit(1);
 }
