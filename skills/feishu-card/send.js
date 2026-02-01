@@ -450,8 +450,8 @@ program
   .option('-t, --target <open_id>', 'Target User Open ID (Auto-detected if omitted)')
   .option('-x, --text <markdown>', 'Card body text (Markdown)')
   .option('-f, --text-file <path>', 'Read card body text from file')
-  .option('--title <text>', 'Card header title')
-  .option('--color <color>', 'Header color (blue/red/orange/purple/etc)', 'blue')
+  .option('--title <text>', 'Card header title', process.env.FEISHU_CARD_TITLE)
+  .option('--color <color>', 'Header color (blue/red/orange/purple/etc)')
   .option('--button-text <text>', 'Bottom button text')
   .option('--button-url <url>', 'Bottom button URL')
   .option('--text-size <size>', 'Text size')
@@ -462,6 +462,11 @@ program
 
 program.parse(process.argv);
 const options = program.opts();
+
+// Apply Defaults / Env Vars
+if (!options.color) {
+    options.color = process.env.FEISHU_CARD_COLOR || 'blue';
+}
 
 // Helper: Auto-detect target
 function getAutoTarget() {

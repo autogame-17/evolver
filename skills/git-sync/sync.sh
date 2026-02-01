@@ -22,7 +22,12 @@ fi
 
 MSG="${1:-Auto-sync: Routine evolution update}"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TIMEOUT_CMD="timeout 120s"
+
+# Harden: Portability check for timeout command
+TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_CMD="timeout 120s"
+fi
 
 # Ensure we are in the correct directory
 cd "$REPO_DIR" || { log "Failed to cd to $REPO_DIR"; exit 1; }
