@@ -99,10 +99,6 @@ async function uploadImage(token, filePath) {
     }
 }
 
-// Function to validate/escape content for JSON stringification
-// For Markdown cards, Feishu expects 'lark_md' format. 
-// Standard JSON.stringify handles escaping quotes/newlines, but maybe there's a limit or specific char issue.
-// The main issue might be structure.
 function buildCardContent(elements, title, color) {
     const card = {
         config: {
@@ -141,14 +137,10 @@ async function sendCard(options) {
             process.exit(1);
         }
     } else if (options.text) {
-        // Fix explicit newline literals from CLI arguments
         contentText = options.text.replace(/\\n/g, '\n');
     }
 
     if (contentText) {
-        // Use 'div' + 'lark_md' for reliable rendering
-        // NOTE: Feishu cards don't support root-level 'markdown' tag in v2 consistently across platforms?
-        // Actually, 'div' with 'text: {tag: lark_md}' is the standard robust way.
         elements.push({
             tag: 'div',
             text: {
@@ -158,7 +150,6 @@ async function sendCard(options) {
         });
     }
 
-    // Add Button
     if (options.buttonText && options.buttonUrl) {
         elements.push({
             tag: 'action',
@@ -173,7 +164,6 @@ async function sendCard(options) {
 
     const cardObj = buildCardContent(elements, options.title, options.color);
     
-    // Determine target
     let receiveIdType = 'open_id';
     if (options.target.startsWith('oc_')) receiveIdType = 'chat_id';
     else if (options.target.startsWith('ou_')) receiveIdType = 'open_id';
@@ -182,7 +172,7 @@ async function sendCard(options) {
     const messageBody = {
         receive_id: options.target,
         msg_type: 'interactive',
-        content: JSON.stringify(cardObj) // Content must be a JSON string
+        content: JSON.stringify(cardObj)
     };
 
     console.log(`Sending card to ${options.target} (Elements: ${elements.length})`);
@@ -203,25 +193,6 @@ async function sendCard(options) {
         
         if (data.code !== 0) {
              console.warn(`[Feishu-Card] Card send failed (Code: ${data.code}, Msg: ${data.msg}). Attempting recall and retry with plain text...`);
-             
-             // Check if we got a message_id even on failure? Unlikely for initial send.
-             // But if data.code indicates a content error (e.g. 40050), the message wasn't sent.
-             // HOWEVER, if the user sees "rendering failed", it means the message WAS sent but displayed wrong.
-             // The API usually returns success (0) even if client renders it poorly.
-             // The user's request: "If rendering failed... recall... then send correct."
-             // BUT we can't detect "client-side rendering failure" from the server response if code is 0.
-             
-             // The only case we can catch here is if the API rejects the card structure entirely.
-             // In that case, no message was created, so no recall needed. Just fallback.
-             
-             // Wait, maybe the user means "If *I* (the bot) detect a potential failure...". 
-             // Or maybe they saw a "Message Card Unsupported" error in the client?
-             
-             // Let's implement the fallback for API rejections.
-             // For "client rendering failure", we can't detect it automatically.
-             // BUT, we can support an explicit `recall_and_retry` mode?
-             
-             // Let's stick to the requested logic: Fallback on API failure.
              return await sendPlainTextFallback(token, receiveIdType, options.target, contentText, options.title);
         }
         

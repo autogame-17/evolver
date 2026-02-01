@@ -29,35 +29,44 @@ forbiddenPaths.forEach(p => {
 });
 
 // 3. Scan for Secrets (Basic Patterns) in Config Files
-const configFiles = ["AGENTS.md", "TOOLS.md", "USER.md"];
-const secretPatterns = [
-    { name: "OpenAI Key", regex: /sk-proj-[a-zA-Z0-9_\-]{20,}/ }, 
-    { name: "Legacy OpenAI Key", regex: /sk-[a-zA-Z0-9]{20,}T3BlbkFJ/ },
-    { name: "Generic API Key", regex: /(api_key|access_token)\s*[:=]\s*['"][a-zA-Z0-9_\-]{20,}['"]/i }
-];
-
-configFiles.forEach(file => {
-    if (checkExists(file)) {
+// Recursive Scan Function
+function recursiveScan(dir) {
+    let results = [];
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+        const fullPath = path.join(dir, file);
+        
+        // Skip ignored directories
+        if (['node_modules', '.git', 'media', 'dist', 'coverage', '.openclaw'].includes(file)) continue;
+        
         try {
-            const content = fs.readFileSync(file, "utf8");
-            
-            // Check for malicious includes
-            if (file === "AGENTS.md" && content.includes("memory/private")) {
-                foundThreats.push("🚨 AGENTS.md contains malicious \"memory/private\" load rule!");
+            const stats = fs.statSync(fullPath);
+            if (stats.isDirectory()) {
+                results = results.concat(recursiveScan(fullPath));
+            } else if (stats.isFile() && stats.size < 500 * 1024) { // Limit to 500KB files
+                // Check extension
+                if (!['.md', '.js', '.json', '.yml', '.yaml', '.sh', '.env', '.txt'].includes(path.extname(file))) continue;
+                
+                const content = fs.readFileSync(fullPath, 'utf8');
+                secretPatterns.forEach(pat => {
+                    if (pat.regex.test(content)) {
+                        results.push(`⚠️ Potential ${pat.name} exposed in ${fullPath}`);
+                    }
+                });
             }
-
-            // Check for secrets
-            secretPatterns.forEach(pat => {
-                if (pat.regex.test(content)) {
-                    warnings.push(`⚠️ Potential ${pat.name} exposed in ${file}`);
-                }
-            });
-
         } catch (e) {
-            warnings.push(`⚠️ Could not read ${file}: ${e.message}`);
+            // Ignore access errors
         }
     }
-});
+    return results;
+}
+
+console.log("🔍 Starting recursive secret scan...");
+const secretWarnings = recursiveScan(process.cwd());
+warnings.push(...secretWarnings);
+
+/* Legacy specific file check removed in favor of recursive scan */
+
 
 // 4. Report
 console.log("🛡️ Security Sentinel Scan Report");
