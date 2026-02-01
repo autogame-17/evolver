@@ -21,6 +21,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'
 // Credentials
 const APP_ID = process.env.FEISHU_APP_ID;
 const APP_SECRET = process.env.FEISHU_APP_SECRET;
+const TOKEN_CACHE_FILE = path.resolve(__dirname, '../../memory/feishu_token.json');
 
 if (!APP_ID || !APP_SECRET) {
     console.error('Error: FEISHU_APP_ID or FEISHU_APP_SECRET not set.');
@@ -28,6 +29,18 @@ if (!APP_ID || !APP_SECRET) {
 }
 
 async function getToken() {
+    const now = Math.floor(Date.now() / 1000);
+
+    // 1. Try Memory Cache (File)
+    if (fs.existsSync(TOKEN_CACHE_FILE)) {
+        try {
+            const cached = JSON.parse(fs.readFileSync(TOKEN_CACHE_FILE, 'utf8'));
+            if (cached.token && cached.expire > now + 60) {
+                return cached.token;
+            }
+        } catch (e) {}
+    }
+
     try {
         const res = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
             method: 'POST',
@@ -35,6 +48,22 @@ async function getToken() {
             body: JSON.stringify({ app_id: APP_ID, app_secret: APP_SECRET })
         });
         const data = await res.json();
+        
+        if (data.code !== 0) throw new Error(`API Error: ${data.msg}`);
+
+        // 2. Update Memory Cache (File)
+        try {
+            const cacheData = {
+                token: data.tenant_access_token,
+                expire: now + data.expire
+            };
+            const cacheDir = path.dirname(TOKEN_CACHE_FILE);
+            if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+            fs.writeFileSync(TOKEN_CACHE_FILE, JSON.stringify(cacheData, null, 2));
+        } catch (e) {
+            console.error("Failed to write token cache:", e.message);
+        }
+
         return data.tenant_access_token;
     } catch (e) {
         console.error('Failed to get token:', e.message);
