@@ -54,10 +54,12 @@ function formatTool(tool) {
 }
 
 function searchTools(query, onlyFree = false) {
-  const queryLower = query.toLowerCase();
+  const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+  
   let results = tools.filter(t => {
     const searchText = `${t.name} ${t.description} ${t.category} ${t.tags?.join(' ') || ''}`.toLowerCase();
-    return searchText.includes(queryLower);
+    // AND Logic: Tool must match ALL terms
+    return terms.every(term => searchText.includes(term));
   });
   
   if (onlyFree) {
