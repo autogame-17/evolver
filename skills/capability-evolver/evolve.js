@@ -142,7 +142,7 @@ function checkSystemHealth() {
     let report = [];
     try {
         // Disk usage
-        const df = execSync('df -h /', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const df = execSync('df -h /', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000 });
         const lines = df.trim().split('\n');
         if (lines.length > 1) {
             // parsing: Filesystem Size Used Avail Use% Mounted on
@@ -154,11 +154,11 @@ function checkSystemHealth() {
     try {
         // Process count: Attempt pgrep first (faster), fallback to ps
         try {
-            const pgrep = execSync('pgrep -c node', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+            const pgrep = execSync('pgrep -c node', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000 });
             report.push(`Node Processes: ${pgrep.trim()}`);
         } catch (e) {
             // Fallback to ps if pgrep fails/missing
-            const ps = execSync('ps aux | grep node | grep -v grep | wc -l', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+            const ps = execSync('ps aux | grep node | grep -v grep | wc -l', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000 });
             report.push(`Node Processes: ${ps.trim()}`);
         }
     } catch (e) {}
