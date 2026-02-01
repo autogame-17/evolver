@@ -306,6 +306,11 @@ async function sendCardLogic(token, options) {
         const data = await res.json();
         
         if (data.code !== 0) {
+             // Check for Auth Error codes
+             if (data.code === 99991663 || data.code === 99991664 || data.code === 99991661) {
+                 throw new Error(`Feishu Auth Error: ${data.code} ${data.msg}`);
+             }
+
              console.warn(`[Feishu-Card] Card send failed (Code: ${data.code}, Msg: ${data.msg}). Attempting fallback to plain text...`);
              return await sendPlainTextFallback(token, receiveIdType, options.target, contentText, options.title, `Card Error: ${data.msg}`);
         }
@@ -314,6 +319,12 @@ async function sendCardLogic(token, options) {
         updateStats('card_success');
 
     } catch (e) {
+        // Rethrow Auth Errors to trigger refresh
+        const msg = e.message || '';
+        if (msg.includes('9999166') || (msg.toLowerCase().includes('token') && (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('expire')))) {
+             throw e;
+        }
+
         console.error('Network/API Error during Card Send:', e.message);
         console.log('[Feishu-Card] Attempting fallback to plain text...');
         return await sendPlainTextFallback(token, receiveIdType, options.target, contentText, options.title, `Network Error: ${e.message}`);
