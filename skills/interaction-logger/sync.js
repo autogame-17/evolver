@@ -73,76 +73,89 @@ function appendToHistory(entries) {
     fs.appendFileSync(HISTORY_FILE, newContent);
 }
 
+async function processFile(filePath, startByte, onEntries) {
+    try {
+        const stats = fs.statSync(filePath);
+        if (stats.size <= startByte) return stats.size; // Nothing new, return current size
+
+        const stream = fs.createReadStream(filePath, { start: startByte });
+        let buffer = '';
+        const newEntries = [];
+
+        for await (const chunk of stream) {
+            buffer += chunk;
+        }
+
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const event = JSON.parse(line);
+                if (event.type === 'message' && event.message) {
+                    const msg = event.message;
+                    let content = '';
+                    if (typeof msg.content === 'string') content = msg.content;
+                    else if (Array.isArray(msg.content)) {
+                        content = msg.content.map(c => c.text || '').join('');
+                    }
+                    
+                    if (content) {
+                        newEntries.push({
+                            timestamp: event.timestamp || new Date().toISOString(),
+                            role: msg.role,
+                            content: content
+                        });
+                    }
+                }
+            } catch (e) {
+                // Ignore parse errors (partial lines)
+            }
+        }
+
+        if (newEntries.length > 0) {
+            onEntries(newEntries);
+        }
+        
+        return stats.size;
+    } catch (e) {
+        console.error(`[Sync] Error reading ${filePath}: ${e.message}`);
+        return startByte; // Don't advance on error
+    }
+}
+
 async function run() {
     const sessionFile = getLatestSessionFile();
     if (!sessionFile) return;
 
     const state = getState();
-    let startByte = 0;
 
-    // If file changed, reset
-    if (state.lastFile !== sessionFile) {
-        state.lastFile = sessionFile;
-        startByte = 0;
-    } else {
-        startByte = state.lastProcessedBytes;
-    }
-
-    const stats = fs.statSync(sessionFile);
-    if (stats.size <= startByte) return; // Nothing new
-
-    const stream = fs.createReadStream(sessionFile, { start: startByte });
-    let buffer = '';
-    
-    const newEntries = [];
-
-    for await (const chunk of stream) {
-        buffer += chunk;
-    }
-
-    // Process buffer (line by line JSONL)
-    const lines = buffer.split('\n');
-    for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-            const event = JSON.parse(line);
-            // We want to capture: User messages and Assistant replies.
-            // Format in JSONL: { type: 'message', message: { role: 'user'|'assistant', content: ... } }
-            // Or tool results?
-            
-            // Note: OpenClaw JSONL format varies.
-            // Usually: { type: 'message', ... }
-            
-            if (event.type === 'message' && event.message) {
-                const msg = event.message;
-                // Filter out empty or tool-only messages if needed?
-                // Let's capture everything that has text.
-                
-                let content = '';
-                if (typeof msg.content === 'string') content = msg.content;
-                else if (Array.isArray(msg.content)) {
-                    content = msg.content.map(c => c.text || '').join('');
-                }
-                
-                if (content) {
-                    newEntries.push({
-                        timestamp: event.timestamp || new Date().toISOString(),
-                        role: msg.role,
-                        content: content
-                    });
-                }
-            }
-        } catch (e) {
-            // Ignore parse errors (partial lines)
+    // 1. Handle File Rotation (Finish old file if it exists)
+    if (state.lastFile && state.lastFile !== sessionFile) {
+        if (fs.existsSync(state.lastFile)) {
+             // console.log(`[Sync] Detected rotation. Finishing: ${path.basename(state.lastFile)}`);
+             await processFile(state.lastFile, state.lastProcessedBytes, (entries) => {
+                 appendToHistory(entries);
+                 console.log(`[Sync] Recovered ${entries.length} messages from rotated log.`);
+             });
         }
+        // Reset for new file
+        state.lastFile = sessionFile;
+        state.lastProcessedBytes = 0;
+    }
+    
+    // 2. Initialize state if missing
+    if (!state.lastFile) {
+        state.lastFile = sessionFile;
+        state.lastProcessedBytes = 0;
     }
 
-    if (newEntries.length > 0) {
-        appendToHistory(newEntries);
-        console.log(`Synced ${newEntries.length} messages.`);
-    }
+    // 3. Process Current File
+    const newSize = await processFile(sessionFile, state.lastProcessedBytes, (entries) => {
+        appendToHistory(entries);
+        console.log(`Synced ${entries.length} messages.`);
+    });
 
-    state.lastProcessedBytes = stats.size;
+    state.lastProcessedBytes = newSize;
     saveState(state);
 }
 
