@@ -353,6 +353,13 @@ async function sendPlainTextFallback(token, receiveIdType, receiveId, text, titl
     let finalContent = text;
     if (title) finalContent = `【${title}】\n\n${text}`;
 
+    // Safety: Truncate to avoid API limits (Feishu Text limit ~30k chars)
+    const MAX_CHARS = 28000;
+    if (finalContent.length > MAX_CHARS) {
+        console.warn(`[Feishu-Card] Fallback text too long (${finalContent.length} chars). Truncating.`);
+        finalContent = finalContent.substring(0, MAX_CHARS) + '\n\n...(Fallback Output Truncated)...';
+    }
+
     const messageBody = {
         receive_id: receiveId,
         msg_type: 'text',

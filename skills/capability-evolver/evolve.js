@@ -5,7 +5,8 @@ const { execSync } = require('child_process');
 
 // Default Configuration
 const MEMORY_DIR = process.env.MEMORY_DIR || path.resolve(__dirname, '../../memory');
-const AGENT_SESSIONS_DIR = path.join(os.homedir(), '.openclaw/agents/main/sessions');
+const AGENT_NAME = process.env.AGENT_NAME || 'main';
+const AGENT_SESSIONS_DIR = path.join(os.homedir(), `.openclaw/agents/${AGENT_NAME}/sessions`);
 const TODAY_LOG = path.join(MEMORY_DIR, new Date().toISOString().split('T')[0] + '.md');
 
 function formatSessionLog(jsonlContent) {
