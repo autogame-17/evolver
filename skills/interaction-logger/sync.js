@@ -76,17 +76,40 @@ function appendToHistory(entries) {
 async function processFile(filePath, startByte, onEntries) {
     try {
         const stats = fs.statSync(filePath);
-        if (stats.size <= startByte) return stats.size; // Nothing new, return current size
+        if (stats.size <= startByte) return stats.size;
 
         const stream = fs.createReadStream(filePath, { start: startByte });
-        let buffer = '';
-        const newEntries = [];
-
+        const chunks = [];
+        
         for await (const chunk of stream) {
-            buffer += chunk;
+            chunks.push(chunk);
+        }
+        
+        // Combine chunks into one Buffer
+        const buffer = Buffer.concat(chunks);
+        
+        // Find the last newline byte (0x0A)
+        let lastNewlineIndex = -1;
+        for (let i = buffer.length - 1; i >= 0; i--) {
+            if (buffer[i] === 0x0A) {
+                lastNewlineIndex = i;
+                break;
+            }
         }
 
-        const lines = buffer.split('\n');
+        // If no newline, we can't process any complete JSON lines yet.
+        // Wait for more data (don't advance pointer).
+        if (lastNewlineIndex === -1) {
+            return startByte;
+        }
+
+        // Slice up to the last newline (inclusive)
+        const processableBuffer = buffer.subarray(0, lastNewlineIndex + 1);
+        const contentStr = processableBuffer.toString('utf8');
+        
+        const lines = contentStr.split('\n');
+        const newEntries = [];
+
         for (const line of lines) {
             if (!line.trim()) continue;
             try {
@@ -116,7 +139,10 @@ async function processFile(filePath, startByte, onEntries) {
             onEntries(newEntries);
         }
         
-        return stats.size;
+        // Calculate new offset based on BYTES processed
+        // startByte + length of processed buffer
+        return startByte + processableBuffer.length;
+        
     } catch (e) {
         console.error(`[Sync] Error reading ${filePath}: ${e.message}`);
         return startByte; // Don't advance on error
