@@ -563,6 +563,8 @@ const ALLOWED_COLORS = [
             if (bodyUpper.includes('FAILED') || bodyUpper.includes('ERROR') || bodyUpper.includes('CRITICAL')) options.color = 'red';
             else if (bodyUpper.includes('WARNING') || bodyUpper.includes('ALERT')) options.color = 'orange';
             else if (bodyUpper.includes('SUCCESS') || bodyUpper.includes('RESOLVED')) options.color = 'green';
+            // Persona Alignment: Auto-carmine for affectionate content
+            else if (bodyUpper.includes('LOVE') || bodyUpper.includes('MASTER') || bodyUpper.includes('MEOW') || bodyUpper.includes('❤') || bodyUpper.includes('❤️')) options.color = 'carmine';
         }
 
         if (options.color !== 'blue') console.log(`[Feishu-Card] Auto-set color to ${options.color} based on content.`);
