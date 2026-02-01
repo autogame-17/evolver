@@ -321,15 +321,23 @@ messages.forEach(msg => {
     lastTime = msg.time;
 });
 
-// Output
-try {
-    if (options.output) {
-        fs.writeFileSync(options.output, md);
-        log(`Report generated: ${options.output}`);
-    } else {
-        console.log(md);
+// AI Summary Injection
+getAiSummary(messages).then(summary => {
+    if (summary) {
+        const headerEnd = md.indexOf('\n\n') + 2;
+        md = md.slice(0, headerEnd) + `## 🧠 AI Intelligence Brief\n${summary}\n\n` + md.slice(headerEnd);
     }
-} catch (e) {
-    console.error(`Error writing output: ${e.message}`);
-    process.exit(1);
-}
+
+    // Output
+    try {
+        if (options.output) {
+            fs.writeFileSync(options.output, md);
+            log(`Report generated: ${options.output}`);
+        } else {
+            console.log(md);
+        }
+    } catch (e) {
+        console.error(`Error writing output: ${e.message}`);
+        process.exit(1);
+    }
+});
