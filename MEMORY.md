@@ -36,13 +36,31 @@
 
 
 ## Tools & Skills
-- **Interaction Logger**: Installed (Automated history logging).
-- **Web Search Plus:** Installed (Serper/Tavily/Exa).
-- **Auto Updater:** Installed (Daily check).
-- **ByteRover:** Installed (Knowledge base).
-- **Playwright:** Installed (Browser automation).
-- **TTS:** Can use Duby API (configured via script).
-- **Kusa.pics:** Installed (Image generation).
+- **Core System**:
+  - **Memory Manager**: Atomic memory updates.
+  - **Interaction Logger**: Automated history logging.
+  - **Capability Evolver**: Self-improvement engine (PCEC).
+  - **Git Sync**: Workspace backup.
+  - **Security Sentinel**: Vulnerability scanning.
+  - **Gateway Manager**: Gateway control.
+- **Intelligence & Research**:
+  - **ByteRover**: Knowledge base & context tree.
+  - **Arxiv Watcher**: Paper search & summary.
+  - **Research**: Deep research via Gemini.
+  - **Reddit Insights**: Trend & sentiment analysis.
+  - **Weather**: Forecasts.
+  - **PDF**: Document manipulation.
+- **Feishu Integration**:
+  - **Cards**: Rich message builder.
+  - **Docs**: Wiki/Doc fetching.
+  - **Stickers**: Sticker sending & analysis.
+  - **Attendance**: Employee monitoring.
+- **Browser & Media**:
+  - **Agent Browser**: Web automation.
+  - **YouTube Downloader**: Video fetch.
+  - **Media Converter**: Format conversion.
+  - **Duby TTS**: Text-to-speech.
+  - **Mind Blow**: Paradox generator.
 ## Critical Meta-Rules
 - **Memory Update Protocol:** NEVER use the `edit` tool on this file. ALWAYS use `memory-manager` skill (`node .../memory-manager/update.js`) to ensure atomic, normalized updates.
 
