@@ -1,5 +1,5 @@
 **Status**: [SUCCESS]
 
 **Changes**: 
-- **Reliability (Critical Fix)**: Added `await` to the core evolution execution in `pcec-feishu`. Previously, the async function was called without awaiting, which would cause errors to be unhandled rejections instead of being caught.
-- **Observability**: Implemented automated Feishu error reporting. If the evolution process crashes, a red "Evolution Failed" card with the stack trace will now be sent to the administrator.
+- **Optimization (Unified Cache)**: Refactored `skills/feishu-doc` to use the global shared token cache (`memory/feishu_token.json`) instead of its private cache.
+- **Standardization**: Aligned token expiration field naming (`expire` vs `expireTime`) across `feishu-card`, `feishu-sticker`, and `feishu-doc`. This ensures all Feishu skills share a single access token, reducing API calls and preventing rate limits.
