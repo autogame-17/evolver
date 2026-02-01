@@ -1,5 +1,4 @@
 // skills/arxiv-watcher/index.js
-const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -29,33 +28,37 @@ function saveState(state) {
     try { fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)); } catch (e) {}
 }
 
+async function fetchWithRetry(url, options = {}, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), options.timeout || 30000);
+            
+            const res = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+            return await res.text();
+        } catch (e) {
+            if (i === retries - 1) throw e;
+            // Exponential backoff: 1s, 2s, 4s
+            await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+        }
+    }
+}
+
 // Helper to fetch data
-function fetchArxiv(query, max) {
+async function fetchArxiv(query, max) {
     const url = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(query)}&start=0&max_results=${max}&sortBy=submittedDate&sortOrder=descending`;
     
-    return new Promise((resolve, reject) => {
-        const req = https.get(url, {
-            headers: {
-                'User-Agent': 'OpenClaw/1.1 (EvolutionBot; +https://github.com/example/openclaw)' 
-            },
-            timeout: 30000 // 30s timeout
-        }, (res) => {
-            if (res.statusCode !== 200) {
-                reject(new Error(`ArXiv API returned status: ${res.statusCode}`));
-                res.resume(); // Consume response to free memory
-                return;
-            }
-
-            let data = '';
-            res.on('data', (chunk) => data += chunk);
-            res.on('end', () => resolve(data));
-        });
-
-        req.on('error', (err) => reject(err));
-        req.on('timeout', () => {
-            req.destroy();
-            reject(new Error('Request timed out after 30000ms'));
-        });
+    return fetchWithRetry(url, {
+        headers: {
+            'User-Agent': 'OpenClaw/1.1 (EvolutionBot; +https://github.com/example/openclaw)' 
+        },
+        timeout: 30000 // 30s timeout
     });
 }
 

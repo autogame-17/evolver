@@ -1,0 +1,13 @@
+{
+  "name": "arxiv-watcher",
+  "version": "1.0.0",
+  "description": "Search and summarize papers from ArXiv.",
+  "main": "index.js",
+  "scripts": {
+    "search": "node index.js",
+    "watch": "node index.js --watch"
+  },
+  "keywords": ["arxiv", "research", "papers", "ai"],
+  "author": "OpenClaw Agent",
+  "license": "MIT"
+}
