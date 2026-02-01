@@ -93,14 +93,19 @@ async function fetchWithRetry(url, options, retries = 3) {
     }
 }
 
-async function getToken() {
+async function getToken(forceRefresh = false) {
     try {
-        if (fs.existsSync(TOKEN_CACHE_FILE)) {
+        if (!forceRefresh && fs.existsSync(TOKEN_CACHE_FILE)) {
             const cached = JSON.parse(fs.readFileSync(TOKEN_CACHE_FILE, 'utf8'));
             const now = Math.floor(Date.now() / 1000);
             if (cached.expire > now + 60) return cached.token;
         }
     } catch (e) {}
+
+    if (forceRefresh) {
+        console.log('[Feishu-Card] Forcing token refresh...');
+        try { if (fs.existsSync(TOKEN_CACHE_FILE)) fs.unlinkSync(TOKEN_CACHE_FILE); } catch(e) {}
+    }
 
     try {
         const res = await fetchWithRetry('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {

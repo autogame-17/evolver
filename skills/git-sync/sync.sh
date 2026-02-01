@@ -68,7 +68,8 @@ fi
 
 # 4. Pull & Rebase (Safety First)
 # log "Syncing with remote..."
-if ! OUT=$($TIMEOUT_CMD git pull --rebase origin "$CURRENT_BRANCH" 2>&1); then
+# Use --autostash to handle background log updates during sync
+if ! OUT=$($TIMEOUT_CMD git pull --rebase --autostash origin "$CURRENT_BRANCH" 2>&1); then
   log "⚠️ Rebase failed. Reason:"
   echo "$OUT" | sed 's/^/    /' # Indent output for readability
   
