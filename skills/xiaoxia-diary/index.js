@@ -32,16 +32,15 @@ const moodFile = `memory/mood.json`;
 let logs = '';
 try {
     const stats = fs.statSync(path.resolve(WORKSPACE_DIR, memoryFile));
-    const MAX_BYTES = 20 * 1024; // 20KB Limit
+    const MAX_BYTES = 15 * 1024; // 15KB Limit (Optimization)
     if (stats.size > MAX_BYTES) {
-        // Read last 20KB for recent context, or maybe sample?
-        // Actually for a diary, we want a summary of the WHOLE day.
-        // Reading the first 10KB + last 10KB might be better?
-        // Let's just read the first 20KB for now to catch the morning plan + day's work.
+        // Read the LAST 15KB to capture recent events and outcomes.
+        const readSize = MAX_BYTES;
+        const startPos = stats.size - readSize;
         const fd = fs.openSync(path.resolve(WORKSPACE_DIR, memoryFile), 'r');
-        const buffer = Buffer.alloc(MAX_BYTES);
-        fs.readSync(fd, buffer, 0, MAX_BYTES, 0);
-        logs = buffer.toString('utf8') + "\n...(Logs Truncated)...";
+        const buffer = Buffer.alloc(readSize);
+        fs.readSync(fd, buffer, 0, readSize, startPos);
+        logs = "...(Old Logs Truncated)...\n" + buffer.toString('utf8');
         fs.closeSync(fd);
     } else {
         logs = readMemory(memoryFile);
