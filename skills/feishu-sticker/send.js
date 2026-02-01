@@ -8,7 +8,9 @@ const FormData = require('form-data');
 // Try to resolve ffmpeg-static from workspace root
 let ffmpegPath;
 try {
-    ffmpegPath = require('ffmpeg-static');
+    // Robust require: search node_modules
+    ffmpegPath = require.resolve('ffmpeg-static');
+    ffmpegPath = require(ffmpegPath);
 } catch (e) {
     try {
         ffmpegPath = require(path.resolve(__dirname, '../../node_modules/ffmpeg-static'));
@@ -244,34 +246,34 @@ async function sendStickerLogic(token, options) {
         }
     }
 
-    // Caching (Enhanced with MD5 Hash)
-    // Unified Cache: Use the shared memory file (same as feishu-card) to prevent duplicate uploads
-    const cachePath = path.resolve(__dirname, '../../memory/feishu_image_keys.json');
-    let cache = {};
-    if (fs.existsSync(cachePath)) {
-        try {
-            const rawCache = fs.readFileSync(cachePath, 'utf8');
-            if (rawCache.trim()) {
-                cache = JSON.parse(rawCache);
-            }
-        } catch (e) {
-            console.warn(`[Cache Warning] Corrupt cache file detected: ${e.message}`);
+    try {
+        // Caching (Enhanced with MD5 Hash)
+        // Unified Cache: Use the shared memory file (same as feishu-card) to prevent duplicate uploads
+        const cachePath = path.resolve(__dirname, '../../memory/feishu_image_keys.json');
+        let cache = {};
+        if (fs.existsSync(cachePath)) {
             try {
-                const backupPath = cachePath + '.corrupt.' + Date.now();
-                fs.copyFileSync(cachePath, backupPath);
-            } catch (backupErr) {}
+                const rawCache = fs.readFileSync(cachePath, 'utf8');
+                if (rawCache.trim()) {
+                    cache = JSON.parse(rawCache);
+                }
+            } catch (e) {
+                console.warn(`[Cache Warning] Corrupt cache file detected: ${e.message}`);
+                try {
+                    const backupPath = cachePath + '.corrupt.' + Date.now();
+                    fs.copyFileSync(cachePath, backupPath);
+                } catch (backupErr) {}
+            }
         }
-    }
 
-    // Calculate file hash
-    const fileBuffer = fs.readFileSync(selectedFile);
-    const fileHash = crypto.createHash('md5').update(fileBuffer).digest('hex');
-    const fileName = path.basename(selectedFile);
-    let imageKey = cache[fileHash] || cache[fileName];
+        // Calculate file hash
+        const fileBuffer = fs.readFileSync(selectedFile);
+        const fileHash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+        const fileName = path.basename(selectedFile);
+        let imageKey = cache[fileHash] || cache[fileName];
 
-    if (!imageKey) {
-        console.log(`Uploading image (Hash: ${fileHash.substring(0, 8)})...`);
-        try {
+        if (!imageKey) {
+            console.log(`Uploading image (Hash: ${fileHash.substring(0, 8)})...`);
             imageKey = await uploadImage(token, selectedFile);
             if (imageKey) {
                 cache[fileHash] = imageKey;
@@ -282,64 +284,55 @@ async function sendStickerLogic(token, options) {
                     fs.renameSync(tempPath, cachePath);
                 } catch (writeErr) {}
             }
-        } finally {
-            // CLEANUP: Delete temp file if we created it during compression
-            if (isTempFile && fs.existsSync(selectedFile)) {
-                try {
-                    fs.unlinkSync(selectedFile);
-                    console.log(`[Cleanup] Deleted temporary compressed file: ${path.basename(selectedFile)}`);
-                } catch (cleanupErr) {
-                    console.warn(`[Cleanup Warning] Failed to delete temp file: ${cleanupErr.message}`);
+        } else {
+            console.log(`Using cached image_key (Hash: ${fileHash.substring(0, 8)})`);
+        }
+
+        // Determine receive_id_type
+        let receiveIdType = 'open_id';
+        if (options.target.startsWith('oc_')) {
+            receiveIdType = 'chat_id';
+        }
+
+        // Send
+        try {
+            const res = await fetch(`https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    receive_id: options.target,
+                    msg_type: 'image',
+                    content: JSON.stringify({ image_key: imageKey })
+                })
+            });
+            const data = await res.json();
+            
+            if (data.code !== 0) {
+                if (data.code === 99991663 || data.code === 99991664 || data.code === 99991661) {
+                     throw new Error(`Feishu Auth Error: ${data.code} ${data.msg}`);
                 }
+                throw new Error(JSON.stringify(data));
             }
+
+            console.log('Success:', JSON.stringify(data.data, null, 2));
+        } catch (e) {
+            if (e.message.includes('Feishu Auth Error')) throw e;
+            console.error('Send failed:', e.message);
+            throw e; 
         }
-    } else {
-        console.log(`Using cached image_key (Hash: ${fileHash.substring(0, 8)})`);
-        // If we used a cached key, but `selectedFile` was a temp compressed file, we still need to delete it!
-        // Because we didn't call uploadImage (which has the finally block if we put it there),
-        // we must clean up here too.
+    } finally {
+        // CLEANUP: Delete temp file if we created it during compression
         if (isTempFile && fs.existsSync(selectedFile)) {
-             try {
-                 fs.unlinkSync(selectedFile);
-                 console.log(`[Cleanup] Deleted temporary compressed file (Cache Hit): ${path.basename(selectedFile)}`);
-             } catch (cleanupErr) {}
-        }
-    }
-
-    // Determine receive_id_type
-    let receiveIdType = 'open_id';
-    if (options.target.startsWith('oc_')) {
-        receiveIdType = 'chat_id';
-    }
-
-    // Send
-    try {
-        const res = await fetch(`https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=${receiveIdType}`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                receive_id: options.target,
-                msg_type: 'image',
-                content: JSON.stringify({ image_key: imageKey })
-            })
-        });
-        const data = await res.json();
-        
-        if (data.code !== 0) {
-            if (data.code === 99991663 || data.code === 99991664 || data.code === 99991661) {
-                 throw new Error(`Feishu Auth Error: ${data.code} ${data.msg}`);
+            try {
+                fs.unlinkSync(selectedFile);
+                console.log(`[Cleanup] Deleted temporary compressed file: ${path.basename(selectedFile)}`);
+            } catch (cleanupErr) {
+                console.warn(`[Cleanup Warning] Failed to delete temp file: ${cleanupErr.message}`);
             }
-            throw new Error(JSON.stringify(data));
         }
-
-        console.log('Success:', JSON.stringify(data.data, null, 2));
-    } catch (e) {
-        if (e.message.includes('Feishu Auth Error')) throw e;
-        console.error('Send failed:', e.message);
-        throw e; 
     }
 }
 
