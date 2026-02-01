@@ -44,9 +44,15 @@ process.stdin.on('end', () => {
         if (logs.length > 50) logs = logs.slice(-50);
         fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
 
-        console.log(`[MenuHandler] Processing event_key: ${eventKey}`);
+        console.log(`[MenuHandler] Processing event_key: ${eventKey} from user: ${userId}`);
 
+        // Security Check
+        const MASTER_ID = 'ou_cdc63fe05e88c580aedead04d851fc04';
         if (eventKey === 'restart_gateway') {
+            if (userId !== MASTER_ID) {
+                console.error(`[Security] UNAUTHORIZED RESTART ATTEMPT by ${userId}`);
+                return;
+            }
             console.log('🚀 RESTART COMMAND VERIFIED. INITIATING RESTART...');
             try {
                 execSync('openclaw gateway restart', { stdio: 'inherit' });

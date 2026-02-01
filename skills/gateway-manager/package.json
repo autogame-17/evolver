@@ -1,0 +1,10 @@
+{
+  "name": "gateway-manager",
+  "version": "1.0.0",
+  "description": "Handles administrative menu events from Feishu to manage the OpenClaw Gateway service.",
+  "main": "handle_menu.js",
+  "scripts": {
+    "start": "node handle_menu.js"
+  },
+  "dependencies": {}
+}
