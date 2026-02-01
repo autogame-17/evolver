@@ -1,6 +1,6 @@
 {
   "name": "interaction-logger",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Log interactions to history files with dynamic target support.",
   "main": "log.js",
   "scripts": {

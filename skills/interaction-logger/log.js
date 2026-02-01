@@ -111,26 +111,32 @@ const logLine = JSON.stringify(entry) + '\n';
 // Write Strategy: Append (JSONL) with Legacy Migration
 try {
     let needsMigration = false;
+    let legacySessions = [];
+
     if (fs.existsSync(absolutePath)) {
-        // Peek at first char to detect Legacy JSON Array format
-        const fd = fs.openSync(absolutePath, 'r');
-        const buffer = Buffer.alloc(1);
-        const bytesRead = fs.readSync(fd, buffer, 0, 1, 0);
-        fs.closeSync(fd);
-        
-        if (bytesRead > 0 && buffer.toString() === '{') {
-            needsMigration = true;
+        // Robust check: Try parsing as full JSON object with 'sessions' key
+        try {
+            const fileContent = fs.readFileSync(absolutePath, 'utf8');
+            // Optimization: Only parse if it looks like the legacy object structure
+            // Legacy starts with { and usually has "sessions" early on
+            if (fileContent.trim().startsWith('{')) {
+                const parsed = JSON.parse(fileContent);
+                if (parsed && Array.isArray(parsed.sessions)) {
+                    needsMigration = true;
+                    legacySessions = parsed.sessions;
+                }
+            }
+        } catch (parseError) {
+            // JSON.parse fails on JSONL (multiple objects), which is good. 
+            // It means it's likely already JSONL or just plain text.
+            needsMigration = false;
         }
     }
 
     if (needsMigration) {
         console.log(`[Logger] Migrating legacy JSON log to JSONL: ${filePath}`);
-        const legacyContent = fs.readFileSync(absolutePath, 'utf8');
-        const legacyData = JSON.parse(legacyContent);
-        const sessions = legacyData.sessions || [];
-        
         // Rewrite as JSONL
-        const jsonlContent = sessions.map(s => JSON.stringify(s)).join('\n') + '\n';
+        const jsonlContent = legacySessions.map(s => JSON.stringify(s)).join('\n') + '\n';
         fs.writeFileSync(absolutePath, jsonlContent); // Overwrite
     }
 
