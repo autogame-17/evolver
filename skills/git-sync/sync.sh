@@ -45,8 +45,8 @@ fi
 # Fetch specific branch to save bandwidth/time
 git fetch origin "$CURRENT_BRANCH" >/dev/null 2>&1
 
-LOCAL=$(git rev-parse @)
-REMOTE=$(git rev-parse "@{u}" 2>/dev/null || echo "")
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse "origin/$CURRENT_BRANCH" 2>/dev/null || echo "")
 
 if [ -n "$REMOTE" ] && [ "$LOCAL" = "$REMOTE" ]; then
   # Local matches Upstream. We are done.

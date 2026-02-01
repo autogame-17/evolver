@@ -14,8 +14,8 @@ Send rich interactive cards via Feishu Open API.
     - ❌ Wrong: `--text "Line 1\nLine 2"` (Shell eats the backslash)
     - ✅ Right: `--text "Line 1\\nLine 2"`
 2.  **Prefer File Input**: For any content longer than one line, **ALWAYS** use `--text-file`.
-    - ✅ Best: `echo "Line 1\nLine 2" > msg.md && node send.js ... --text-file msg.md`
-    - This avoids ALL shell escaping issues.
+    - ⚠️ **IMPORTANT**: When creating files in shell, use quoted heredoc `<<'EOF'` to prevent variable expansion (e.g., losing `$100` or `$VAR`).
+    - ✅ Best: `cat <<'EOF' > msg.md ... EOF`
 3.  **Markdown Support**: Supports **Bold**, *Italic*, [Links](url).
     - ⚠️ **Code Blocks**: Support is limited. Use single backticks \`code\` for safety.
 
@@ -26,11 +26,12 @@ Send rich interactive cards via Feishu Open API.
 node skills/feishu-card/send.js --target "ou_..." --text "Hello **World**"
 
 # Via file (Recommended for Reports/Long Text)
-cat <<EOF > msg.md
+# NOTE: Use 'EOF' (quoted) to prevent shell from eating $variables
+cat <<'EOF' > msg.md
 **Status**: Ready
 **Details**:
-- Item 1
-- Item 2
+- Cost: $100 (Safe from expansion)
+- Path: $HOME (Literal text, not expanded)
 EOF
 node skills/feishu-card/send.js --target "ou_..." --title "Report" --text-file msg.md
 rm msg.md
