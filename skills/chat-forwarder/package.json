@@ -1,0 +1,9 @@
+{
+  "name": "chat-forwarder",
+  "version": "1.0.0",
+  "description": "Feishu Chat Merge Forwarder",
+  "main": "index.js",
+  "dependencies": {
+    "commander": "^9.0.0"
+  }
+}
