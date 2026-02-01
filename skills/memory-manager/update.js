@@ -2,9 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { program } = require('commander');
 
-// MAX RETRIES for file lock contention
-const MAX_RETRIES = 5;
+// MAX RETRIES for lock acquisition
+const MAX_RETRIES = 10;
 const RETRY_DELAY_MS = 200;
+const LOCK_STALE_MS = 10000; // 10s max lock time
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -15,29 +16,89 @@ function normalize(text) {
     return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').map(line => line.trimEnd()).join('\n');
 }
 
+// Atomic Locking via mkdir (POSIX atomic)
+// We use a directory as a lock because mkdir is atomic.
+function acquireLock(file) {
+    const lockPath = `${file}.lock`;
+    let attempts = 0;
+    while (attempts < MAX_RETRIES) {
+        try {
+            // Check for stale lock
+            if (fs.existsSync(lockPath)) {
+                const stats = fs.statSync(lockPath);
+                if (Date.now() - stats.mtimeMs > LOCK_STALE_MS) {
+                    console.warn(`[Lock] Found stale lock ${lockPath}, removing...`);
+                    fs.rmdirSync(lockPath);
+                }
+            }
+            
+            fs.mkdirSync(lockPath); // Atomic
+            return lockPath;
+        } catch (e) {
+            attempts++;
+            // console.log(`[Lock] Waiting for lock on ${file}...`);
+            const delay = RETRY_DELAY_MS + Math.floor(Math.random() * 50);
+            // Sync sleep simulation for simplicity or require deasync? No, we are async function safeUpdate.
+            // Wait, acquireLock needs to be async or we need sleepSync.
+            // We'll make safeUpdate call this and await sleep. But we are inside loop.
+            // Let's return null if fail, handle retry in caller? 
+            // Better: use fs.mkdirSync and if it fails (EEXIST), return null.
+            return null;
+        }
+    }
+    throw new Error(`Could not acquire lock for ${file} after ${MAX_RETRIES} attempts.`);
+}
+
+function releaseLock(lockPath) {
+    try {
+        if (lockPath && fs.existsSync(lockPath)) {
+            fs.rmdirSync(lockPath);
+        }
+    } catch (e) {
+        console.error(`[Lock] Failed to release lock: ${e.message}`);
+    }
+}
+
 async function safeUpdate(filePath, options) {
     const absPath = path.resolve(filePath);
-    
+    let lockPath = null;
     let attempts = 0;
+
     while (attempts < MAX_RETRIES) {
         attempts++;
         try {
-            // 1. Read fresh content
+            // 1. Acquire Lock
+            lockPath = `${absPath}.lock`;
+            try {
+                if (fs.existsSync(lockPath)) {
+                     const stats = fs.statSync(lockPath);
+                     if (Date.now() - stats.mtimeMs > LOCK_STALE_MS) {
+                         console.warn(`[Lock] Pruning stale lock.`);
+                         fs.rmdirSync(lockPath);
+                     }
+                }
+                fs.mkdirSync(lockPath);
+            } catch (e) {
+                // Lock busy
+                if (attempts === MAX_RETRIES) throw new Error("Lock acquisition timeout");
+                const delay = RETRY_DELAY_MS + Math.floor(Math.random() * 100);
+                await sleep(delay);
+                continue;
+            }
+
+            // CRITICAL SECTION START
+            
+            // 2. Read fresh content
             if (!fs.existsSync(absPath)) {
                 if (options.operation === 'create') {
                     fs.writeFileSync(absPath, '', 'utf8');
                 } else {
-                    console.error(`File not found: ${absPath}`);
-                    process.exit(1);
+                    throw new Error(`File not found: ${absPath}`);
                 }
             }
             
             let content = fs.readFileSync(absPath, 'utf8');
-            let originalContent = content;
-
-            // 2. Normalize
-            content = normalize(content);
-
+            
             // 3. Apply changes
             let modified = false;
 
@@ -45,66 +106,59 @@ async function safeUpdate(filePath, options) {
                 const search = (options.old !== undefined) ? options.old : options.search;
                 const replace = (options.new !== undefined) ? options.new : options.replace;
                 
-                if (search === undefined || replace === undefined) {
-                    console.error("Replace operation requires --old/--search and --new/--replace");
-                    process.exit(1);
-                }
+                if (search === undefined || replace === undefined) throw new Error("Replace requires --old and --new");
 
-                // Try exact match first
+                // Try exact match
                 if (content.includes(search)) {
                     content = content.replace(search, replace);
                     modified = true;
                     console.log("Status: Exact match successful.");
                 } else {
                     // Try normalized match
+                    const normContent = normalize(content);
                     const normSearch = normalize(search);
-                    if (content.includes(normSearch)) {
-                        content = content.replace(normSearch, replace);
-                        modified = true;
-                        console.log("Status: Normalized match successful.");
+                    if (normContent.includes(normSearch)) {
+                         // This is tricky because replacing in normalized string doesn't map back to original easily.
+                         // But if we just overwrite with normalized content, it might be okay for Markdown.
+                         // For safety, let's just stick to "Exact Match" usually, or simple replacement.
+                         // Actually, the original code normalized *content* then wrote it back.
+                         // That changes line endings/whitespace for the WHOLE file.
+                         // We will keep that behavior for consistency.
+                         content = normalize(content).replace(normSearch, replace);
+                         modified = true;
+                         console.log("Status: Normalized match successful.");
                     } else {
-                        console.error("Error: Could not find target text even after normalization.");
-                        console.log("Diagnostics - Target text start:", search.substring(0, 50));
+                        console.error("Error: Text not found.");
                         process.exit(1);
                     }
                 }
             } else if (options.operation === 'append') {
-                if (!options.content) {
-                    console.error("Append requires --content");
-                    process.exit(1);
-                }
+                if (!options.content) throw new Error("Append requires --content");
                 if (!content.endsWith('\n') && content.length > 0) content += '\n';
                 content += options.content + '\n';
                 modified = true;
                 console.log("Status: Append successful.");
             }
 
-            // 4. Write back with Retry Logic
+            // 4. Write back
             if (modified) {
-                // Check if file changed on disk while we were processing (Race Condition Check)
-                const currentFileContent = fs.readFileSync(absPath, 'utf8');
-                if (normalize(currentFileContent) !== normalize(originalContent)) {
-                    throw new Error("File changed on disk during processing (Race Condition). Retrying...");
-                }
-
-                fs.writeFileSync(absPath, content, 'utf8');
+                // Atomic Write via rename for extra safety
+                const tempPath = `${absPath}.tmp`;
+                fs.writeFileSync(tempPath, content, 'utf8');
+                fs.renameSync(tempPath, absPath);
                 console.log("Success: Memory file updated safely.");
-                return; // Success
             } else {
                 console.log("No changes needed.");
-                return;
             }
+            
+            // CRITICAL SECTION END
+            return; // Done
 
         } catch (e) {
             console.error(`Attempt ${attempts} failed: ${e.message}`);
-            if (attempts < MAX_RETRIES) {
-                const delay = RETRY_DELAY_MS * attempts + Math.floor(Math.random() * 100);
-                console.log(`Retrying in ${delay}ms...`);
-                await sleep(delay);
-            } else {
-                console.error("Max retries exceeded. Aborting update.");
-                process.exit(1);
-            }
+            if (attempts >= MAX_RETRIES) process.exit(1);
+        } finally {
+            if (lockPath) releaseLock(lockPath);
         }
     }
 }
