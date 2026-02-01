@@ -19,21 +19,38 @@ async function fetchSheetContent(token, accessToken) {
   }
 
   let fullContent = [];
+  
+  // Sort sheets by index just in case
+  sheets.sort((a, b) => a.index - b.index);
 
-  // 2. Fetch content for the first sheet (or all?) - Let's do first sheet for now to save tokens/time
-  for (const sheet of sheets.slice(0, 1)) { // Limit to 1 for efficiency in this basic skill
+  // 2. Fetch content for up to 3 sheets to balance context vs info
+  // Skip hidden sheets
+  const visibleSheets = sheets.filter(s => !s.hidden).slice(0, 3);
+
+  for (const sheet of visibleSheets) {
     const sheetId = sheet.sheet_id;
     const title = sheet.title;
     
-    // Fetch values
-    // Range: just the sheetId will often fetch the used range or we need to specify?
-    // v2 API: /values/{range}
-    // range can be "sheetId!A1:Z100"
+    // Determine Range based on grid properties
+    // Default safe limits: Max 20 columns (T), Max 100 rows
+    // This prevents massive JSON payloads
+    let maxRows = 100;
+    let maxCols = 20;
+
+    if (sheet.grid_properties) {
+      maxRows = Math.min(sheet.grid_properties.row_count, 100);
+      maxCols = Math.min(sheet.grid_properties.column_count, 20);
+    }
     
-    // Let's guess a reasonable range or use the grid info if available. 
-    // Simplified: "sheetId" usually works? No, strict range often required.
-    // Let's try fetching a large range A1:Z100
-    const range = `${sheetId}!A1:E50`; 
+    // Avoid fetching empty grids (though unlikely for valid sheets)
+    if (maxRows === 0 || maxCols === 0) {
+        fullContent.push(`## Sheet: ${title} (Empty)`);
+        continue;
+    }
+
+    const lastColName = indexToColName(maxCols); // 1-based index to A, B, ... T
+    const range = `${sheetId}!A1:${lastColName}${maxRows}`;
+    
     const valUrl = `https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/${token}/values/${range}`;
     
     const valRes = await fetch(valUrl, {
@@ -46,6 +63,10 @@ async function fetchSheetContent(token, accessToken) {
     if (valData.code === 0 && valData.data && valData.data.valueRange) {
       const rows = valData.data.valueRange.values;
       fullContent.push(markdownTable(rows));
+      
+      if (sheet.grid_properties && sheet.grid_properties.row_count > maxRows) {
+        fullContent.push(`*(Truncated: showing first ${maxRows} of ${sheet.grid_properties.row_count} rows)*`);
+      }
     } else {
       fullContent.push(`(Could not fetch values: ${valData.msg})`);
     }
@@ -57,23 +78,49 @@ async function fetchSheetContent(token, accessToken) {
   };
 }
 
+function indexToColName(num) {
+  let ret = '';
+  while (num > 0) {
+    num--;
+    ret = String.fromCharCode(65 + (num % 26)) + ret;
+    num = Math.floor(num / 26);
+  }
+  return ret || 'A';
+}
+
 function markdownTable(rows) {
   if (!rows || rows.length === 0) return "";
   
   // Normalize row length
-  const maxLength = Math.max(...rows.map(r => r.length));
+  const maxLength = Math.max(...rows.map(r => r ? r.length : 0));
   
-  const header = rows[0];
-  const body = rows.slice(1);
+  if (maxLength === 0) return "(Empty Table)";
+
+  // Ensure all rows are arrays and have strings
+  const cleanRows = rows.map(row => {
+      if (!Array.isArray(row)) return Array(maxLength).fill("");
+      return row.map(cell => {
+          if (cell === null || cell === undefined) return "";
+          if (typeof cell === 'object') return JSON.stringify(cell); // Handle rich text segments roughly
+          return String(cell).replace(/\n/g, "<br>"); // Keep single line
+      });
+  });
+
+  const header = cleanRows[0];
+  const body = cleanRows.slice(1);
   
-  let md = "| " + header.map(c => c || "").join(" | ") + " |\n";
-  md += "| " + header.map(() => "---").join(" | ") + " |\n";
+  // Handle case where header might be shorter than max length
+  const paddedHeader = [...header];
+  while(paddedHeader.length < maxLength) paddedHeader.push("");
+
+  let md = "| " + paddedHeader.join(" | ") + " |\n";
+  md += "| " + paddedHeader.map(() => "---").join(" | ") + " |\n";
   
   for (const row of body) {
     // Pad row if needed
     const padded = [...row];
     while(padded.length < maxLength) padded.push("");
-    md += "| " + padded.map(c => c || "").join(" | ") + " |\n";
+    md += "| " + padded.join(" | ") + " |\n";
   }
   
   return md;
