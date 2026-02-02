@@ -16,7 +16,7 @@ Generate a song based on lyrics and style.
 - **tags** (required): Music style tags (e.g., "metal, fast, electronic").
 - **title** (optional): Title of the song.
 - **instrumental** (optional): Boolean, true for instrumental only.
-- **model** (optional): Model version, default "chirp-v3-0".
+- **model** (optional): Model version, default "chirp-v5".
 
 ## Implementation Details
 

@@ -7,7 +7,7 @@ program
   .option('--prompt <prompt>', 'Music description')
   .option('--tags <tags>', 'Style tags')
   .option('--title <title>', 'Song title')
-  .option('--model <model>', 'Model version', 'chirp-v3-0')
+  .option('--model <model>', 'Model version', 'chirp-v5')
   .option('--instrumental', 'Instrumental only')
   .parse(process.argv);
 
