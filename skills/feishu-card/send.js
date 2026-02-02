@@ -533,26 +533,7 @@ function getAutoTarget() {
                     return lastId;
                 }
             } catch (innerErr) {
-                console.warn(`[Feishu-Card] Optimized read failed (${innerErr.message}).`);
-                // Fallback: Check size before full read to prevent OOM
-                try {
-                    const fallbackStats = fs.statSync(menuPath);
-                    const MAX_FALLBACK_SIZE = 5 * 1024 * 1024; // 5MB
-                    
-                    if (fallbackStats.size > MAX_FALLBACK_SIZE) {
-                        console.warn(`[Feishu-Card] Warning: menu_events.json is too large (${(fallbackStats.size/1024/1024).toFixed(2)}MB) for full scan. Skipping fallback.`);
-                    } else {
-                        const fullContent = fs.readFileSync(menuPath, 'utf8');
-                        const matches = [...fullContent.matchAll(/"(?:open_id|chat_id|user_id|open_chat_id)"\s*:\s*"(o[uc]_[a-z0-9]+)"/g)];
-                        if (matches.length > 0) {
-                             const lastId = matches[matches.length - 1][1];
-                             console.log(`[Feishu-Card] Target Source: menu_events.json (Full Scan: ${lastId})`);
-                             return lastId;
-                        }
-                    }
-                } catch (e) {
-                    console.warn(`[Feishu-Card] Fallback logic failed: ${e.message}`);
-                }
+                console.warn(`[Feishu-Card] Optimized read failed (${innerErr.message}). Skipping menu_events.json fallback to prevent I/O spike.`);
             }
         }
     } catch (e) {
@@ -659,6 +640,7 @@ const ALLOWED_COLORS = [
         
         // Priority 1: Title Checks (Strong Signal)
         if (titleUpper.includes('EVOLUTION') && titleUpper.includes('CYCLE')) options.color = 'purple';
+        else if (titleUpper.includes('MUTATION')) options.color = 'purple';
         else if (titleUpper.includes('OPTIMIZATION') || titleUpper.includes('UPGRADE')) options.color = 'violet';
         else if (titleUpper.includes('FAILED') || titleUpper.includes('ERROR') || titleUpper.includes('CRITICAL')) options.color = 'red';
         else if (titleUpper.includes('WARNING') || titleUpper.includes('ALERT')) options.color = 'orange';
