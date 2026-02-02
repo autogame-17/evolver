@@ -123,7 +123,8 @@ async function fetchWithRetry(url, options, retries = 3, timeoutMs = 15000) {
             const jitter = Math.random() * 500; // 0-500ms jitter
             const delay = baseDelay + jitter;
             
-            console.warn(`[Fetch] Attempt ${i+1}/${retries} failed: ${e.message}. Retrying in ${Math.floor(delay)}ms...`);
+            const errDetail = e.code ? ` (${e.code})` : '';
+            console.warn(`[Fetch] Attempt ${i+1}/${retries} failed: ${e.message}${errDetail}. Retrying in ${Math.floor(delay)}ms...`);
             await new Promise(r => setTimeout(r, delay));
         }
     }
@@ -387,7 +388,8 @@ async function sendCardLogic(token, options) {
 
         console.error('Network/API Error during Card Send:', e.message);
         console.log('[Feishu-Card] Attempting fallback to plain text...');
-        return await sendPlainTextFallback(token, receiveIdType, options.target, contentText, options.title, `Network Error: ${e.message}`);
+        const errDetail = e.code ? ` (${e.code})` : '';
+        return await sendPlainTextFallback(token, receiveIdType, options.target, contentText, options.title, `Network Error: ${e.message}${errDetail}`);
     }
 }
 
