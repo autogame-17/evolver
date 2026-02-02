@@ -6,14 +6,15 @@ const fs = require('fs');
 const FEISHU_SENDER = path.resolve(__dirname, '../feishu-card/send.js');
 
 async function run() {
-    console.log('🚀 Launching Enhanced Evolution Protocol (Feishu Edition)...');
-
+    console.log('🚀 Launching Feishu Evolver Wrapper...');
+    
+    // Check if we are in "Master Mode" (Feishu Reporting Enabled)
     try {
-        // Set environment variable to trigger Feishu-specific prompt in core evolver
         process.env.EVOLVE_REPORT_TOOL = 'feishu-card';
         
-        // Run the core evolution logic
-        await require('../capability-evolver/evolve').run();
+        // Run the core evolution logic from capability-evolver
+        const evolver = require('../capability-evolver/evolve');
+        await evolver.run();
 
     } catch (e) {
         console.error('Evolution failed:', e);

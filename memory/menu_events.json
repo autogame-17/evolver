@@ -366,5 +366,74 @@
       },
       "timestamp": 1770023344
     }
+  },
+  {
+    "timestamp": "2026-02-02T09:28:02.783Z",
+    "eventKey": "test_menu_button",
+    "userId": "ou_27b9ae709fb7789e3c0d560ed692db41",
+    "raw": {
+      "schema": "2.0",
+      "event_id": "962e732fae87530bcc07386746e2afef",
+      "token": "",
+      "create_time": "1770024482000",
+      "event_type": "application.bot.menu_v6",
+      "tenant_key": "17d8f81eef175740",
+      "app_id": "cli_a9f70f9a4a791bd1",
+      "event_key": "test_menu_button",
+      "operator": {
+        "operator_id": {
+          "open_id": "ou_27b9ae709fb7789e3c0d560ed692db41",
+          "union_id": "on_9fdb6bc992845a15744c14ff7188f3bb",
+          "user_id": "g2929b28"
+        }
+      },
+      "timestamp": 1770024482
+    }
+  },
+  {
+    "timestamp": "2026-02-02T09:28:07.702Z",
+    "eventKey": "test_menu_button",
+    "userId": "ou_27b9ae709fb7789e3c0d560ed692db41",
+    "raw": {
+      "schema": "2.0",
+      "event_id": "83cd0ad596a604fec5825cdaa3812e04",
+      "token": "",
+      "create_time": "1770024487000",
+      "event_type": "application.bot.menu_v6",
+      "tenant_key": "17d8f81eef175740",
+      "app_id": "cli_a9f70f9a4a791bd1",
+      "event_key": "test_menu_button",
+      "operator": {
+        "operator_id": {
+          "open_id": "ou_27b9ae709fb7789e3c0d560ed692db41",
+          "union_id": "on_9fdb6bc992845a15744c14ff7188f3bb",
+          "user_id": "g2929b28"
+        }
+      },
+      "timestamp": 1770024487
+    }
+  },
+  {
+    "timestamp": "2026-02-02T09:28:11.963Z",
+    "eventKey": "restart_gateway",
+    "userId": "ou_27b9ae709fb7789e3c0d560ed692db41",
+    "raw": {
+      "schema": "2.0",
+      "event_id": "4506df16f38c10ea88dc2285c4dd886c",
+      "token": "",
+      "create_time": "1770024491000",
+      "event_type": "application.bot.menu_v6",
+      "tenant_key": "17d8f81eef175740",
+      "app_id": "cli_a9f70f9a4a791bd1",
+      "event_key": "restart_gateway",
+      "operator": {
+        "operator_id": {
+          "open_id": "ou_27b9ae709fb7789e3c0d560ed692db41",
+          "union_id": "on_9fdb6bc992845a15744c14ff7188f3bb",
+          "user_id": "g2929b28"
+        }
+      },
+      "timestamp": 1770024491
+    }
   }
 ]

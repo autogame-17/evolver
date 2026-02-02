@@ -1,0 +1,9 @@
+{
+  "name": "feishu-bitable",
+  "version": "1.0.0",
+  "description": "Feishu Bitable Manipulation",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "node-fetch": "^2.7.0"
+  }
+}

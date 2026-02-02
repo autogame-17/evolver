@@ -18,8 +18,14 @@ async function fetchBitableContent(token, accessToken) {
 
   let fullContent = [];
 
-  // 2. Fetch records for the first table
-  for (const table of tables.slice(0, 1)) {
+  // 2. Fetch records
+  // Prioritize Ignacia's table (tblJgZHOmPybgX60) if present
+  const targetTableId = "tblJgZHOmPybgX60";
+  const targetTable = tables.find(t => t.table_id === targetTableId);
+  // If target found, only fetch it. Otherwise fetch first 3 to be safe/fast.
+  const tablesToFetch = targetTable ? [targetTable] : tables.slice(0, 3);
+
+  for (const table of tablesToFetch) {
     const tableId = table.table_id;
     const tableName = table.name;
     

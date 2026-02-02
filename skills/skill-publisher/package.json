@@ -1,0 +1,13 @@
+{
+  "name": "skill-publisher",
+  "version": "1.0.0",
+  "description": "Publish skills to remote Git repositories with subtree split and GitHub Release support",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "yargs": "^17.7.2",
+    "dotenv": "^16.3.1"
+  }
+}
