@@ -333,6 +333,8 @@ async function run() {
     const skillsDir = path.resolve(__dirname, '../../skills');
     const hasFeishuCard = fs.existsSync(path.join(skillsDir, 'feishu-card'));
     
+    // Determine Reporting Directive based on Environment
+    // If running from wrapper, process.env.EVOLVE_REPORT_TOOL will be set to 'feishu-card'
     let reportingDirective = `3.  **📝 REPORT**:
     - Use \`message\` tool.
     - **Title**: 🧬 Evolution ${cycleId}
@@ -473,9 +475,9 @@ ${reportingDirective}
 4.  **💾 PERSIST & SPREAD (TRIPLE SYNC)**:
     - **Step A (Local)**: Save all file changes.
     - **Step B (ClawHub - Omni)**: 
-      - If you modified ANY skill folder (e.g., \`skills/feishu-card\`), run the safe publisher:
-        \`node skills/capability-evolver/safe_publish.js skills/<skill-name>\`
-      - This script handles auth checks, version bumping, and publishing automatically.
+      - [DELETED] Safe Publish is PERMANENTLY REMOVED per Master Directive (2026-02-03).
+      - Do NOT recreate safe_publish.js.
+      - Do NOT attempt to publish to ClawHub.
     - **Step C (GitHub - Skill)**: Push the \`capability-evolver\` repo if modified.
     // Step E (Recursive Trigger): Optional Self-Replication
     if (process.argv.includes('--recursive')) {
