@@ -123,6 +123,14 @@ Optional env vars:
 - `RELEASE_NOTES` or `RELEASE_NOTES_FILE`
 - `RELEASE_CREATE` (`true` to call `gh release create`)
 
+## Versioning (SemVer)
+
+MAJOR.MINOR.PATCH
+
+- MAJOR: incompatible changes
+- MINOR: backward-compatible features
+- PATCH: backward-compatible bug fixes
+
 ## Configuration & Decoupling
 
 This skill is designed to be **environment-agnostic**. It uses standard OpenClaw tools by default.

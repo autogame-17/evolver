@@ -91,6 +91,14 @@ node index.js --loop
 - `RELEASE_NOTES` 或 `RELEASE_NOTES_FILE`
 - `RELEASE_CREATE`（`true` 则调用 `gh release create`）
 
+## 版本号规则（SemVer）
+
+MAJOR.MINOR.PATCH
+
+• MAJOR（主版本）：有不兼容变更  
+• MINOR（次版本）：向后兼容的新功能  
+• PATCH（修订/补丁）：向后兼容的问题修复
+
 ## 安全协议
 
 1.  **单进程锁**：进化引擎禁止生成子进化进程（防止 Fork 炸弹）。

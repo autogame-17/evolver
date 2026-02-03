@@ -113,11 +113,20 @@ function main() {
     requireEnv('PUBLIC_REPO', publicRepo);
   }
 
-  const releaseTag = process.env.RELEASE_TAG || '';
-  const releaseTitle = process.env.RELEASE_TITLE || '';
+  let releaseTag = process.env.RELEASE_TAG || '';
+  let releaseTitle = process.env.RELEASE_TITLE || '';
   const releaseNotes = process.env.RELEASE_NOTES || '';
   const releaseNotesFile = process.env.RELEASE_NOTES_FILE || '';
   const releaseCreate = String(process.env.RELEASE_CREATE || '').toLowerCase() === 'true';
+
+  // If not provided, infer from build output package.json version.
+  if (!releaseTag && useBuildOutput) {
+    try {
+      const builtPkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), outDir, 'package.json'), 'utf8'));
+      if (builtPkg && builtPkg.version) releaseTag = `v${builtPkg.version}`;
+      if (!releaseTitle && releaseTag) releaseTitle = releaseTag;
+    } catch (e) {}
+  }
 
   ensureClean(dryRun);
   ensureBranch(sourceBranch, dryRun);

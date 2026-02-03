@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 
@@ -141,6 +142,132 @@ function rewritePackageJson(outDirAbs) {
   }
 }
 
+function parseSemver(v) {
+  const m = String(v || '').trim().match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!m) return null;
+  return { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]) };
+}
+
+function formatSemver(x) {
+  return `${x.major}.${x.minor}.${x.patch}`;
+}
+
+function bumpSemver(base, bump) {
+  const v = parseSemver(base);
+  if (!v) return null;
+  if (bump === 'major') return `${v.major + 1}.0.0`;
+  if (bump === 'minor') return `${v.major}.${v.minor + 1}.0`;
+  if (bump === 'patch') return `${v.major}.${v.minor}.${v.patch + 1}`;
+  return formatSemver(v);
+}
+
+function git(cmd) {
+  return execSync(cmd, { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+}
+
+function getBaseReleaseCommit() {
+  // Prefer last "prepare vX.Y.Z" commit; fallback to HEAD~50 range later.
+  try {
+    const hash = git('git log -n 1 --pretty=%H --grep="chore(release): prepare v"');
+    return hash || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function getCommitSubjectsSince(baseCommit) {
+  try {
+    if (!baseCommit) {
+      const out = git('git log -n 30 --pretty=%s');
+      return out ? out.split('\n').filter(Boolean) : [];
+    }
+    const out = git(`git log ${baseCommit}..HEAD --pretty=%s`);
+    return out ? out.split('\n').filter(Boolean) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function inferBumpFromSubjects(subjects) {
+  const subs = (subjects || []).map(s => String(s));
+  const hasBreaking = subs.some(s => /\bBREAKING CHANGE\b/i.test(s) || /^[a-z]+(\(.+\))?!:/.test(s));
+  if (hasBreaking) return { bump: 'major', reason: 'breaking change marker in commit subject' };
+
+  const hasFeat = subs.some(s => /^feat(\(.+\))?:/i.test(s));
+  if (hasFeat) return { bump: 'minor', reason: 'feature commit detected (feat:)' };
+
+  const hasFix = subs.some(s => /^(fix|perf)(\(.+\))?:/i.test(s));
+  if (hasFix) return { bump: 'patch', reason: 'fix/perf commit detected' };
+
+  if (subs.length === 0) return { bump: 'none', reason: 'no commits since base release commit' };
+  return { bump: 'patch', reason: 'default to patch for non-breaking changes' };
+}
+
+function suggestVersion() {
+  const pkgPath = path.join(REPO_ROOT, 'package.json');
+  let baseVersion = null;
+  try {
+    baseVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version;
+  } catch (e) {}
+
+  const baseCommit = getBaseReleaseCommit();
+  const subjects = getCommitSubjectsSince(baseCommit);
+  const decision = inferBumpFromSubjects(subjects);
+
+  let suggested = null;
+  if (decision.bump === 'none') suggested = baseVersion;
+  else suggested = bumpSemver(baseVersion, decision.bump);
+
+  return { baseVersion, baseCommit, subjects, decision, suggestedVersion: suggested };
+}
+
+function writePrivateSemverNote(note) {
+  const privateDir = path.join(REPO_ROOT, 'memory');
+  ensureDir(privateDir);
+  fs.writeFileSync(path.join(privateDir, 'semver_suggestion.json'), JSON.stringify(note, null, 2) + '\n', 'utf8');
+}
+
+function writePrivateSemverPrompt(note) {
+  const privateDir = path.join(REPO_ROOT, 'memory');
+  ensureDir(privateDir);
+  const subjects = Array.isArray(note.subjects) ? note.subjects : [];
+  const semverRule = [
+    'MAJOR.MINOR.PATCH',
+    '- MAJOR: incompatible changes',
+    '- MINOR: backward-compatible features',
+    '- PATCH: backward-compatible bug fixes',
+  ].join('\n');
+
+  const prompt = [
+    'You are a release versioning assistant.',
+    'Decide the next version bump using SemVer rules below.',
+    '',
+    semverRule,
+    '',
+    `Base version: ${note.baseVersion || '(unknown)'}`,
+    `Base commit: ${note.baseCommit || '(unknown)'}`,
+    '',
+    'Recent commit subjects (newest first):',
+    ...subjects.map(s => `- ${s}`),
+    '',
+    'Output JSON only:',
+    '{ "bump": "major|minor|patch|none", "suggestedVersion": "x.y.z", "reason": ["..."] }',
+  ].join('\n');
+
+  fs.writeFileSync(path.join(privateDir, 'semver_prompt.md'), prompt + '\n', 'utf8');
+}
+
+function writeDistVersion(outDirAbs, version) {
+  if (!version) return;
+  const p = path.join(outDirAbs, 'package.json');
+  if (!fs.existsSync(p)) return;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    pkg.version = version;
+    fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+  } catch (e) {}
+}
+
 function pruneExcluded(outDirAbs, excludeGlobs) {
   const all = listFilesRec(outDirAbs);
   for (const abs of all) {
@@ -171,6 +298,11 @@ function main() {
   const outDir = String(manifest.outDir || 'dist-public');
   const outDirAbs = path.join(REPO_ROOT, outDir);
 
+  // SemVer suggestion (private). This does not modify the source repo version.
+  const semver = suggestVersion();
+  writePrivateSemverNote(semver);
+  writePrivateSemverPrompt(semver);
+
   rmDir(outDirAbs);
   ensureDir(outDirAbs);
 
@@ -185,6 +317,11 @@ function main() {
   pruneExcluded(outDirAbs, exclude);
   applyRewrite(outDirAbs, manifest.rewrite);
   rewritePackageJson(outDirAbs);
+
+  // Prefer explicit version; otherwise use suggested version.
+  const releaseVersion = process.env.RELEASE_VERSION || semver.suggestedVersion;
+  if (releaseVersion) writeDistVersion(outDirAbs, releaseVersion);
+
   validateNoPrivatePaths(outDirAbs);
 
   // Write build manifest for private verification (do not include in dist-public/).
@@ -198,6 +335,10 @@ function main() {
   fs.writeFileSync(path.join(privateDir, 'public_build_info.json'), JSON.stringify(buildInfo, null, 2) + '\n', 'utf8');
 
   process.stdout.write(`Built public output at ${outDir}\n`);
+  if (semver && semver.suggestedVersion) {
+    process.stdout.write(`Suggested version: ${semver.suggestedVersion}\n`);
+    process.stdout.write(`SemVer decision: ${semver.decision ? semver.decision.bump : 'unknown'}\n`);
+  }
 }
 
 try {
