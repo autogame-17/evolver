@@ -60,7 +60,7 @@ function formatSessionLog(jsonlContent) {
                 if (content.includes('NO_REPLY')) continue;
 
                 // Clean up newlines for compact reading
-                content = content.replace(/\n+/g, ' ').slice(0, 300);
+                content = content.replace(/\n+/g, ' ').slice(0, 500);
                 entry = `**${role}**: ${content}`;
 
             } else if (data.type === 'tool_result' || (data.message && data.message.role === 'toolResult')) {
@@ -535,7 +535,7 @@ ${reportingDirective}
         // The user wants continuous evolution without Cron.
         // At the end of your work, YOU MUST run this tool call to keep the chain alive:
         sessions_spawn({
-            task: "exec: node skills/evolver/index.js --loop",
+            task: "exec: node skills/private-evolver/index.js --loop",
             agentId: "main",
             cleanup: "delete",
             label: "mad_dog_relay"
