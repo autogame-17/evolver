@@ -78,7 +78,7 @@ node index.js --loop
 必填环境变量：
 
 - `PUBLIC_REMOTE`（默认：`public`）
-- `PUBLIC_REPO`（用于 `gh release create`，例如 `autogame-17/evolver`）
+- `PUBLIC_REPO`（例如 `autogame-17/evolver`）
 - `PUBLIC_OUT_DIR`（默认：`dist-public`）
 - `PUBLIC_USE_BUILD_OUTPUT`（默认：`true`）
 
@@ -89,7 +89,10 @@ node index.js --loop
 - `RELEASE_TAG`（例如 `v1.0.41`）
 - `RELEASE_TITLE`（例如 `v1.0.41 - GEP protocol`）
 - `RELEASE_NOTES` 或 `RELEASE_NOTES_FILE`
-- `RELEASE_CREATE`（`true` 则调用 `gh release create`）
+- `GITHUB_TOKEN`（或 `GH_TOKEN` / `GITHUB_PAT`，用于创建 GitHub Release）
+- `RELEASE_SKIP`（`true` 则跳过创建 GitHub Release；默认会创建）
+- `RELEASE_USE_GH`（`true` 则使用 `gh` CLI，否则默认走 GitHub API）
+- `PUBLIC_RELEASE_ONLY`（`true` 则仅为已存在的 tag 创建 Release；不发布代码）
 
 ## 版本号规则（SemVer）
 

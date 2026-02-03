@@ -110,7 +110,7 @@ This repo is a private staging area for the public repository.
 Required env vars:
 
 - `PUBLIC_REMOTE` (default: `public`)
-- `PUBLIC_REPO` (for release creation with `gh`, e.g. `autogame-17/evolver`)
+- `PUBLIC_REPO` (e.g. `autogame-17/evolver`)
  - `PUBLIC_OUT_DIR` (default: `dist-public`)
  - `PUBLIC_USE_BUILD_OUTPUT` (default: `true`)
 
@@ -121,7 +121,10 @@ Optional env vars:
 - `RELEASE_TAG` (e.g. `v1.0.41`)
 - `RELEASE_TITLE` (e.g. `v1.0.41 - GEP protocol`)
 - `RELEASE_NOTES` or `RELEASE_NOTES_FILE`
-- `RELEASE_CREATE` (`true` to call `gh release create`)
+- `GITHUB_TOKEN` (or `GH_TOKEN` / `GITHUB_PAT`) for GitHub Release creation
+- `RELEASE_SKIP` (`true` to skip creating a GitHub Release; default is to create)
+- `RELEASE_USE_GH` (`true` to use `gh` CLI instead of GitHub API)
+- `PUBLIC_RELEASE_ONLY` (`true` to only create a Release for an existing tag; no publish)
 
 ## Versioning (SemVer)
 
