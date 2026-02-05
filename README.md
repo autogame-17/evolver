@@ -40,6 +40,7 @@ The **Capability Evolver** inspects runtime history, extracts signals, selects a
 - **Auto-Log Analysis**: scans memory and history files for errors and patterns.
 - **Self-Repair Guidance**: emits repair-focused directives from signals.
 - **GEP Protocol**: standardized evolution with reusable assets.
+- **Mutation + Personality Evolution (GEP v1.4)**: each evolution run is gated by an explicit Mutation object and an evolvable PersonalityState.
 - **One-Command Evolution**: `node index.js` to generate the prompt.
 
 ## Typical Use Cases
@@ -133,6 +134,26 @@ MAJOR.MINOR.PATCH
 - MAJOR: incompatible changes
 - MINOR: backward-compatible features
 - PATCH: backward-compatible bug fixes
+
+## Changelog
+
+### v1.4.0
+- Add explicit Mutation protocol (repair/optimize/innovate) and require Mutation per evolution run.
+- Add evolvable PersonalityState with small PersonalityMutation steps and natural selection statistics.
+- Extend EvolutionEvent with `mutation_id` and `personality_state`; record both into Memory Graph events.
+- Add `scripts/gep_personality_report.js` to observe personality success rates and convergence.
+
+### v1.3.1
+- Release preparation for v1.3.1.
+
+### v1.3.0
+- Release preparation for v1.3.0.
+
+### v1.2.0
+- Memory Graph v2 and A2A exchange protocol integration.
+
+### v1.1.0
+- Public build/publish pipeline, prompt budget enforcement, and structured GEP asset storage.
 
 ## Configuration & Decoupling
 

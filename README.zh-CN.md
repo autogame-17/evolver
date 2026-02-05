@@ -13,6 +13,7 @@
 - **自动日志分析**：自动扫描 `.jsonl` 会话日志，寻找错误模式。
 - **自我修复**：检测运行时崩溃并编写修复补丁。
 - **GEP 协议**：标准化进化流程与可复用资产，支持可审计与可共享。
+- **突变协议与人格进化（GEP v1.4）**：每次进化必须显式声明 Mutation，并维护可进化的 PersonalityState（小步突变 + 自然选择收敛）。
 - **动态集成**：自动检测并使用本地工具（如 `git-sync` 或 `feishu-card`），如果不存在则回退到通用模式，零依赖运行。
 - **持续循环模式**：持续运行的自我修复循环。
 
@@ -101,6 +102,26 @@ MAJOR.MINOR.PATCH
 • MAJOR（主版本）：有不兼容变更  
 • MINOR（次版本）：向后兼容的新功能  
 • PATCH（修订/补丁）：向后兼容的问题修复
+
+## 更新日志
+
+### v1.4.0
+- 增加显式 Mutation Protocol（repair/optimize/innovate），每轮进化必须生成 Mutation 对象并通过安全约束门控。
+- 增加 Personality Evolution：维护 PersonalityState，小幅 PersonalityMutation（单次不超过 ±0.2，最多 2 个参数），并基于成功率做自然选择收敛。
+- EvolutionEvent 增加 `mutation_id` 与 `personality_state` 字段；Memory Graph 同步记录 Mutation 与 Personality 的因果链路。
+- 新增 `scripts/gep_personality_report.js`，用于统计不同人格配置下的成功率差异与收敛趋势。
+
+### v1.3.1
+- v1.3.1 发布准备。
+
+### v1.3.0
+- v1.3.0 发布准备。
+
+### v1.2.0
+- Memory Graph v2 与 A2A 进化资产交换集成。
+
+### v1.1.0
+- public 构建/发布流水线、提示词预算控制与结构化 GEP 资产持久化。
 
 ## 安全协议
 
