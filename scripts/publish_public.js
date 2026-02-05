@@ -43,7 +43,14 @@ function resolveGhExecutable() {
 }
 
 function resolveClawhubExecutable() {
-  if (hasCommand('clawhub')) return 'clawhub';
+  // On Windows, Node spawn/spawnSync does not always resolve PATHEXT the same way as shells.
+  // Prefer the explicit .cmd shim when available to avoid false "not logged in" detection.
+  if (process.platform === 'win32') {
+    if (hasCommand('clawhub.cmd')) return 'clawhub.cmd';
+    if (hasCommand('clawhub')) return 'clawhub';
+  } else {
+    if (hasCommand('clawhub')) return 'clawhub';
+  }
   // Common npm global bin location on Windows.
   const candidates = [
     'C:\\Users\\Administrator\\AppData\\Roaming\\npm\\clawhub.cmd',
@@ -70,11 +77,24 @@ function isClawhubLoggedIn() {
   const exe = resolveClawhubExecutable();
   if (!exe) return false;
   try {
-    const res = spawnSync(exe, ['whoami'], { stdio: 'ignore' });
+    const res = spawnClawhub(exe, ['whoami'], { stdio: 'ignore' });
     return res.status === 0;
   } catch (e) {
     return false;
   }
+}
+
+function spawnClawhub(exe, args, options) {
+  // On Windows, directly spawning a .cmd can be flaky; using cmd.exe preserves argument parsing.
+  // (Using shell:true can break clap/commander style option parsing for some CLIs.)
+  const opts = options || {};
+  if (process.platform === 'win32' && typeof exe === 'string') {
+    const lower = exe.toLowerCase();
+    if (lower.endsWith('.cmd')) {
+      return spawnSync('cmd.exe', ['/d', '/s', '/c', exe, ...(args || [])], opts);
+    }
+  }
+  return spawnSync(exe, args || [], opts);
 }
 
 function publishToClawhub({ skillDir, slug, name, version, changelog, tags, dryRun }) {
@@ -83,7 +103,7 @@ function publishToClawhub({ skillDir, slug, name, version, changelog, tags, dryR
 
   // Idempotency: if this version already exists on ClawHub, skip publishing.
   try {
-    const inspect = spawnSync(ok.exe, ['inspect', slug, '--version', version], { stdio: 'ignore' });
+    const inspect = spawnClawhub(ok.exe, ['inspect', slug, '--version', version], { stdio: 'ignore' });
     if (inspect.status === 0) {
       process.stdout.write(`ClawHub already has ${slug}@${version}. Skipping.\n`);
       return;
@@ -105,8 +125,24 @@ function publishToClawhub({ skillDir, slug, name, version, changelog, tags, dryR
     return;
   }
 
-  const res = spawnSync(ok.exe, args, { stdio: 'inherit' });
-  if (res.status !== 0) throw new Error(`clawhub publish failed for slug ${slug}`);
+  // Capture output to handle "version already exists" idempotently.
+  const res = spawnClawhub(ok.exe, args, { encoding: 'utf8' });
+  const out = `${res.stdout || ''}\n${res.stderr || ''}`.trim();
+
+  if (res.status === 0) {
+    if (out) process.stdout.write(out + '\n');
+    return;
+  }
+
+  // Some clawhub deployments do not support reliable "inspect" by slug.
+  // Treat "Version already exists" as success to make publishing idempotent.
+  if (/version already exists/i.test(out)) {
+    process.stdout.write(`ClawHub already has ${slug}@${version}. Skipping.\n`);
+    return;
+  }
+
+  if (out) process.stderr.write(out + '\n');
+  throw new Error(`clawhub publish failed for slug ${slug}`);
 }
 
 function requireEnv(name, value) {
