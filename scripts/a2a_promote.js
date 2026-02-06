@@ -1,5 +1,6 @@
 const { loadGenes, upsertGene, appendCapsule } = require('../src/gep/assetStore');
 const { readRecentExternalCandidates } = require('../src/gep/assetStore');
+const { isValidationCommandAllowed } = require('../src/gep/solidify');
 
 function parseArgs(argv) {
   const out = { flags: new Set(), kv: new Map(), positionals: [] };
@@ -48,6 +49,22 @@ function main() {
   const candidate = (Array.isArray(external) ? external : []).find(x => x && x.type === type && String(x.id) === id);
   if (!candidate) {
     throw new Error(`Candidate not found in external zone: type=${type} id=${id}`);
+  }
+
+  // Audit Gene validation commands before promotion.
+  // Reject any Gene whose validation array contains unsafe commands.
+  if (type === 'Gene') {
+    const validation = Array.isArray(candidate.validation) ? candidate.validation : [];
+    for (const cmd of validation) {
+      const c = String(cmd || '').trim();
+      if (!c) continue;
+      if (!isValidationCommandAllowed(c)) {
+        throw new Error(
+          `Refusing to promote Gene ${id}: validation command rejected by safety check: "${c}". ` +
+          'Only node/npm/npx commands without shell operators are allowed.'
+        );
+      }
+    }
   }
 
   const promoted = JSON.parse(JSON.stringify(candidate));

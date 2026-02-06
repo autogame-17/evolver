@@ -137,6 +137,11 @@ MAJOR.MINOR.PATCH
 
 ## Changelog
 
+### v1.4.4
+- Add validation command safety check: Gene validation commands are gated by prefix whitelist (node/npm/npx) and shell operator blocking.
+- Add validation audit on A2A Gene promotion: external Genes with unsafe validation commands are rejected before promotion.
+- Add Security Model documentation to README.
+
 ### v1.4.3
 - Release preparation for v1.4.3.
 
@@ -165,6 +170,42 @@ MAJOR.MINOR.PATCH
 
 ### v1.1.0
 - Public build/publish pipeline, prompt budget enforcement, and structured GEP asset storage.
+
+## Security Model
+
+This section describes the execution boundaries and trust model of the Capability Evolver.
+
+### What Executes and What Does Not
+
+| Component | Behavior | Executes Shell Commands? |
+| :--- | :--- | :--- |
+| `src/evolve.js` | Reads logs, selects genes, builds prompts, writes artifacts | Read-only git/process queries only |
+| `src/gep/prompt.js` | Assembles the GEP protocol prompt string | No (pure text generation) |
+| `src/gep/selector.js` | Scores and selects Genes/Capsules by signal matching | No (pure logic) |
+| `src/gep/solidify.js` | Validates patches via Gene `validation` commands | Yes (see below) |
+| `index.js` (loop recovery) | Prints `sessions_spawn(...)` text to stdout on crash | No (text output only; execution depends on host runtime) |
+
+### Gene Validation Command Safety
+
+`solidify.js` executes commands listed in a Gene's `validation` array. To prevent arbitrary command execution, all validation commands are gated by a safety check (`isValidationCommandAllowed`):
+
+1. **Prefix whitelist**: Only commands starting with `node`, `npm`, or `npx` are allowed.
+2. **No command substitution**: Backticks and `$(...)` are rejected anywhere in the command string.
+3. **No shell operators**: After stripping quoted content, `;`, `&`, `|`, `>`, `<` are rejected.
+4. **Timeout**: Each command is limited to 180 seconds.
+5. **Scoped execution**: Commands run with `cwd` set to the repository root.
+
+### A2A External Asset Ingestion
+
+External Gene/Capsule assets ingested via `scripts/a2a_ingest.js` are staged in an isolated candidate zone. Promotion to local stores (`scripts/a2a_promote.js`) requires:
+
+1. Explicit `--validated` flag (operator must verify the asset first).
+2. For Genes: all `validation` commands are audited against the same safety check before promotion. Unsafe commands cause the promotion to be rejected.
+3. Gene promotion never overwrites an existing local Gene with the same ID.
+
+### `sessions_spawn` Output
+
+The `sessions_spawn(...)` strings in `index.js` and `evolve.js` are **text output to stdout**, not direct function calls. Whether they are interpreted depends on the host runtime (e.g., OpenClaw platform). The evolver itself does not invoke `sessions_spawn` as executable code.
 
 ## Configuration & Decoupling
 

@@ -105,6 +105,11 @@ MAJOR.MINOR.PATCH
 
 ## 更新日志
 
+### v1.4.4
+- 增加 validation 命令安全检查：Gene validation 命令执行前通过前缀白名单（node/npm/npx）和 shell 操作符拦截进行门控。
+- 增加 A2A Gene 提升审查：外部 Gene 的 validation 命令不安全时拒绝提升。
+- 增加安全模型文档。
+
 ### v1.4.3
 - v1.4.3 发布准备。
 
@@ -134,11 +139,47 @@ MAJOR.MINOR.PATCH
 ### v1.1.0
 - public 构建/发布流水线、提示词预算控制与结构化 GEP 资产持久化。
 
-## 安全协议
+## 安全模型
 
-1.  **单进程锁**：进化引擎禁止生成子进化进程（防止 Fork 炸弹）。
-2.  **稳定性优先**：如果近期错误率较高，强制进入 **修复模式**，暂停创新功能。
-3.  **环境检测**：外部集成（如 Git 同步）仅在检测到相应插件存在时才会启用。
+本节描述 Capability Evolver 的执行边界和信任模型。
+
+### 各组件执行行为
+
+| 组件 | 行为 | 是否执行 Shell 命令 |
+| :--- | :--- | :--- |
+| `src/evolve.js` | 读取日志、选择 Gene、构建提示词、写入工件 | 仅只读 git/进程查询 |
+| `src/gep/prompt.js` | 组装 GEP 协议提示词字符串 | 否（纯文本生成） |
+| `src/gep/selector.js` | 按信号匹配对 Gene/Capsule 评分和选择 | 否（纯逻辑） |
+| `src/gep/solidify.js` | 通过 Gene `validation` 命令验证补丁 | 是（见下文） |
+| `index.js`（循环恢复） | 崩溃时向 stdout 输出 `sessions_spawn(...)` 文本 | 否（纯文本输出；是否执行取决于宿主运行时） |
+
+### Gene Validation 命令安全机制
+
+`solidify.js` 执行 Gene 的 `validation` 数组中的命令。为防止任意命令执行，所有 validation 命令在执行前必须通过安全检查（`isValidationCommandAllowed`）：
+
+1. **前缀白名单**：仅允许以 `node`、`npm` 或 `npx` 开头的命令。
+2. **禁止命令替换**：命令中任何位置出现反引号或 `$(...)` 均被拒绝。
+3. **禁止 Shell 操作符**：去除引号内容后，`;`、`&`、`|`、`>`、`<` 均被拒绝。
+4. **超时限制**：每条命令限时 180 秒。
+5. **作用域限定**：命令以仓库根目录为工作目录执行。
+
+### A2A 外部资产摄入
+
+通过 `scripts/a2a_ingest.js` 摄入的外部 Gene/Capsule 资产被暂存在隔离的候选区。提升到本地存储（`scripts/a2a_promote.js`）需要：
+
+1. 显式传入 `--validated` 标志（操作者必须先验证资产）。
+2. 对 Gene：提升前审查所有 `validation` 命令，不安全的命令会导致提升被拒绝。
+3. Gene 提升不会覆盖本地已存在的同 ID Gene。
+
+### `sessions_spawn` 输出
+
+`index.js` 和 `evolve.js` 中的 `sessions_spawn(...)` 字符串是**输出到 stdout 的纯文本**，而非直接函数调用。是否被执行取决于宿主运行时（如 OpenClaw 平台）。进化引擎本身不将 `sessions_spawn` 作为可执行代码调用。
+
+### 其他安全约束
+
+1. **单进程锁**：进化引擎禁止生成子进化进程（防止 Fork 炸弹）。
+2. **稳定性优先**：如果近期错误率较高，强制进入修复模式，暂停创新功能。
+3. **环境检测**：外部集成（如 Git 同步）仅在检测到相应插件存在时才会启用。
 
 ## 许可证
 MIT
