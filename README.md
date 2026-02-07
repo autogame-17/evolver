@@ -137,6 +137,17 @@ MAJOR.MINOR.PATCH
 
 ## Changelog
 
+### v1.5.0
+- Add content-addressable asset IDs (SHA-256 canonical hashing) for deduplication, tamper detection, and cross-node consistency.
+- Add environment fingerprint capture (node version, platform, arch, evolver version) embedded in EvolutionEvents, Capsules, and ValidationReports.
+- Add standardized ValidationReport type with machine-readable schema, full command results, and env fingerprint.
+- Add GEP A2A protocol layer with 6 message types (hello/publish/fetch/report/decision/revoke) and pluggable transport interface.
+- Add FileTransport as default A2A transport (JSONL outbox/inbox).
+- Add asset_id integrity verification on A2A ingest; reject tampered assets.
+- Add schema_version field to all GEP asset types (Gene, Capsule, EvolutionEvent, ValidationReport).
+- Fix: dry-run mode no longer triggers rollback.
+- Merge backport/online-fixes: self-contained crash recovery with recover_loop.js.
+
 ### v1.4.4
 - Add validation command safety check: Gene validation commands are gated by prefix whitelist (node/npm/npx) and shell operator blocking.
 - Add validation audit on A2A Gene promotion: external Genes with unsafe validation commands are rejected before promotion.
