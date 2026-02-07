@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { getGepAssetsDir } = require('./paths');
+const { computeAssetId, SCHEMA_VERSION } = require('./contentHash');
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -30,9 +31,7 @@ function getDefaultGenes() {
     version: 1,
     genes: [
       {
-        type: 'Gene',
-        id: 'gene_gep_repair_from_errors',
-        category: 'repair',
+        type: 'Gene', id: 'gene_gep_repair_from_errors', category: 'repair',
         signals_match: ['error', 'exception', 'failed', 'unstable'],
         preconditions: ['signals contains error-related indicators'],
         strategy: [
@@ -43,19 +42,14 @@ function getDefaultGenes() {
           'Validate using declared validation steps; rollback on failure',
           'Solidify knowledge: append EvolutionEvent, update Gene/Capsule store',
         ],
-        constraints: {
-          max_files: 12,
-          forbidden_paths: ['.git', 'node_modules'],
-        },
+        constraints: { max_files: 12, forbidden_paths: ['.git', 'node_modules'] },
         validation: [
           'node -e "require(\'./src/evolve\'); require(\'./src/gep/solidify\'); console.log(\'ok\')"',
           'node -e "require(\'./src/gep/selector\'); require(\'./src/gep/memoryGraph\'); console.log(\'ok\')"',
         ],
       },
       {
-        type: 'Gene',
-        id: 'gene_gep_optimize_prompt_and_assets',
-        category: 'optimize',
+        type: 'Gene', id: 'gene_gep_optimize_prompt_and_assets', category: 'optimize',
         signals_match: ['protocol', 'gep', 'prompt', 'audit', 'reusable'],
         preconditions: ['need stricter, auditable evolution protocol outputs'],
         strategy: [
@@ -66,47 +60,22 @@ function getDefaultGenes() {
           'Validate by running node index.js run and ensuring no runtime errors',
           'Solidify: record EvolutionEvent, update Gene definitions, create Capsule on success',
         ],
-        constraints: {
-          max_files: 20,
-          forbidden_paths: ['.git', 'node_modules'],
-        },
+        constraints: { max_files: 20, forbidden_paths: ['.git', 'node_modules'] },
         validation: ['node -e "require(\'./src/evolve\'); require(\'./src/gep/prompt\'); console.log(\'ok\')"'],
       },
     ],
   };
 }
 
-function getDefaultCapsules() {
-  return { version: 1, capsules: [] };
-}
+function getDefaultCapsules() { return { version: 1, capsules: [] }; }
+function genesPath() { return path.join(getGepAssetsDir(), 'genes.json'); }
+function capsulesPath() { return path.join(getGepAssetsDir(), 'capsules.json'); }
+function eventsPath() { return path.join(getGepAssetsDir(), 'events.jsonl'); }
+function candidatesPath() { return path.join(getGepAssetsDir(), 'candidates.jsonl'); }
+function externalCandidatesPath() { return path.join(getGepAssetsDir(), 'external_candidates.jsonl'); }
 
-function genesPath() {
-  return path.join(getGepAssetsDir(), 'genes.json');
-}
-
-function capsulesPath() {
-  return path.join(getGepAssetsDir(), 'capsules.json');
-}
-
-function eventsPath() {
-  return path.join(getGepAssetsDir(), 'events.jsonl');
-}
-
-function candidatesPath() {
-  return path.join(getGepAssetsDir(), 'candidates.jsonl');
-}
-
-function externalCandidatesPath() {
-  return path.join(getGepAssetsDir(), 'external_candidates.jsonl');
-}
-
-function loadGenes() {
-  return readJsonIfExists(genesPath(), getDefaultGenes()).genes || [];
-}
-
-function loadCapsules() {
-  return readJsonIfExists(capsulesPath(), getDefaultCapsules()).capsules || [];
-}
+function loadGenes() { return readJsonIfExists(genesPath(), getDefaultGenes()).genes || []; }
+function loadCapsules() { return readJsonIfExists(capsulesPath(), getDefaultCapsules()).capsules || []; }
 
 function getLastEventId() {
   try {
@@ -117,9 +86,7 @@ function getLastEventId() {
     if (lines.length === 0) return null;
     const last = JSON.parse(lines[lines.length - 1]);
     return last && typeof last.id === 'string' ? last.id : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function readAllEvents() {
@@ -127,38 +94,24 @@ function readAllEvents() {
     const p = eventsPath();
     if (!fs.existsSync(p)) return [];
     const raw = fs.readFileSync(p, 'utf8');
-    return raw
-      .split('\n')
-      .map(l => l.trim())
-      .filter(Boolean)
-      .map(l => {
-        try {
-          return JSON.parse(l);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
+    return raw.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      try { return JSON.parse(l); } catch { return null; }
+    }).filter(Boolean);
+  } catch { return []; }
 }
 
 function appendEventJsonl(eventObj) {
-  const dir = getGepAssetsDir();
-  ensureDir(dir);
+  const dir = getGepAssetsDir(); ensureDir(dir);
   fs.appendFileSync(eventsPath(), JSON.stringify(eventObj) + '\n', 'utf8');
 }
 
 function appendCandidateJsonl(candidateObj) {
-  const dir = getGepAssetsDir();
-  ensureDir(dir);
+  const dir = getGepAssetsDir(); ensureDir(dir);
   fs.appendFileSync(candidatesPath(), JSON.stringify(candidateObj) + '\n', 'utf8');
 }
 
 function appendExternalCandidateJsonl(obj) {
-  const dir = getGepAssetsDir();
-  ensureDir(dir);
+  const dir = getGepAssetsDir(); ensureDir(dir);
   fs.appendFileSync(externalCandidatesPath(), JSON.stringify(obj) + '\n', 'utf8');
 }
 
@@ -168,19 +121,10 @@ function readRecentCandidates(limit = 20) {
     if (!fs.existsSync(p)) return [];
     const raw = fs.readFileSync(p, 'utf8');
     const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-    const recent = lines.slice(Math.max(0, lines.length - limit));
-    return recent
-      .map(l => {
-        try {
-          return JSON.parse(l);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
+    return lines.slice(Math.max(0, lines.length - limit)).map(l => {
+      try { return JSON.parse(l); } catch { return null; }
+    }).filter(Boolean);
+  } catch { return []; }
 }
 
 function readRecentExternalCandidates(limit = 50) {
@@ -189,31 +133,31 @@ function readRecentExternalCandidates(limit = 50) {
     if (!fs.existsSync(p)) return [];
     const raw = fs.readFileSync(p, 'utf8');
     const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-    const recent = lines.slice(Math.max(0, lines.length - limit));
-    return recent
-      .map(l => {
-        try {
-          return JSON.parse(l);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
+    return lines.slice(Math.max(0, lines.length - limit)).map(l => {
+      try { return JSON.parse(l); } catch { return null; }
+    }).filter(Boolean);
+  } catch { return []; }
+}
+
+// Safety net: ensure schema_version and asset_id are present before writing.
+function ensureSchemaFields(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (!obj.schema_version) obj.schema_version = SCHEMA_VERSION;
+  if (!obj.asset_id) { try { obj.asset_id = computeAssetId(obj); } catch (e) {} }
+  return obj;
 }
 
 function upsertGene(geneObj) {
+  ensureSchemaFields(geneObj);
   const current = readJsonIfExists(genesPath(), getDefaultGenes());
   const genes = Array.isArray(current.genes) ? current.genes : [];
   const idx = genes.findIndex(g => g && g.id === geneObj.id);
-  if (idx >= 0) genes[idx] = geneObj;
-  else genes.push(geneObj);
+  if (idx >= 0) genes[idx] = geneObj; else genes.push(geneObj);
   writeJsonAtomic(genesPath(), { version: current.version || 1, genes });
 }
 
 function appendCapsule(capsuleObj) {
+  ensureSchemaFields(capsuleObj);
   const current = readJsonIfExists(capsulesPath(), getDefaultCapsules());
   const capsules = Array.isArray(current.capsules) ? current.capsules : [];
   capsules.push(capsuleObj);
@@ -222,31 +166,18 @@ function appendCapsule(capsuleObj) {
 
 function upsertCapsule(capsuleObj) {
   if (!capsuleObj || capsuleObj.type !== 'Capsule' || !capsuleObj.id) return;
+  ensureSchemaFields(capsuleObj);
   const current = readJsonIfExists(capsulesPath(), getDefaultCapsules());
   const capsules = Array.isArray(current.capsules) ? current.capsules : [];
   const idx = capsules.findIndex(c => c && c.type === 'Capsule' && String(c.id) === String(capsuleObj.id));
-  if (idx >= 0) capsules[idx] = capsuleObj;
-  else capsules.push(capsuleObj);
+  if (idx >= 0) capsules[idx] = capsuleObj; else capsules.push(capsuleObj);
   writeJsonAtomic(capsulesPath(), { version: current.version || 1, capsules });
 }
 
 module.exports = {
-  loadGenes,
-  loadCapsules,
-  readAllEvents,
-  getLastEventId,
-  appendEventJsonl,
-  appendCandidateJsonl,
-  appendExternalCandidateJsonl,
-  readRecentCandidates,
-  readRecentExternalCandidates,
-  upsertGene,
-  appendCapsule,
-  upsertCapsule,
-  genesPath,
-  capsulesPath,
-  eventsPath,
-  candidatesPath,
-  externalCandidatesPath,
+  loadGenes, loadCapsules, readAllEvents, getLastEventId,
+  appendEventJsonl, appendCandidateJsonl, appendExternalCandidateJsonl,
+  readRecentCandidates, readRecentExternalCandidates,
+  upsertGene, appendCapsule, upsertCapsule,
+  genesPath, capsulesPath, eventsPath, candidatesPath, externalCandidatesPath,
 };
-

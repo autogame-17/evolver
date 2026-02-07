@@ -1,5 +1,6 @@
 const evolve = require('./src/evolve');
 const { solidify } = require('./src/gep/solidify');
+const path = require('path');
 
 async function main() {
   const args = process.argv.slice(2);
@@ -23,11 +24,21 @@ async function main() {
             // [HARDENING] Fail-Safe Recovery
             // If evolution crashes, we must output a recovery command so the agent spawns the next loop.
             // We add a delay to prevent rapid crash loops.
+            let recoverRel = 'skills/evolver/scripts/recover_loop.js';
+            try {
+              // In most installs, __dirname is .../workspace/skills/<skillName>
+              const workspaceRoot = path.resolve(__dirname, '..', '..');
+              const absRecover = path.join(__dirname, 'scripts', 'recover_loop.js');
+              const rel = path.relative(workspaceRoot, absRecover);
+              if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
+                recoverRel = rel.split(path.sep).join('/');
+              }
+            } catch (e) {}
             console.log(`
             // [RECOVERY MODE] Evolution Logic Crashed.
-            // Spawning next loop with delay to prevent rapid crash loops.
+            // Spawning next loop via safe recovery script.
             sessions_spawn({
-                task: "exec: sleep 10 && node skills/private-evolver/index.js --loop",
+                task: "exec: node ${recoverRel}",
                 agentId: "main",
                 cleanup: "delete",
                 label: "mad_dog_recovery"
