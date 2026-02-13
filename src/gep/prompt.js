@@ -86,6 +86,7 @@ I. Mandatory Evolution Object Model (Output EXACTLY these 5 objects)
 Output separate JSON objects. DO NOT wrap in a single array. DO NOT use markdown code blocks (like \`\`\`json).
 Missing any object = PROTOCOL FAILURE.
 STRICT JSON ONLY. NO CHITCHAT.
+ENSURE VALID JSON SYNTAX (escape quotes in strings).
 
 0. Mutation (The Trigger) - MUST BE FIRST
    {
@@ -177,6 +178,16 @@ ACTIVE STRATEGY (${selectedGeneId}):
 ${selectedGene.strategy.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 ADHERE TO THIS STRATEGY STRICTLY.
 `.trim();
+  } else {
+    // Fallback strategy if no gene is selected or strategy is missing
+    strategyBlock = `
+ACTIVE STRATEGY (Generic):
+1. Analyze signals and context.
+2. Select or create a Gene that addresses the root cause.
+3. Apply minimal, safe changes.
+4. Validate changes strictly.
+5. Solidify knowledge.
+`.trim();
   }
   
   // Use intelligent truncation
@@ -190,6 +201,35 @@ ADHERE TO THIS STRATEGY STRICTLY.
   if (capsPreview.length > 5000) {
       capsPreview = capsPreview.slice(0, 5000) + "\n...[TRUNCATED_CAPABILITIES]...";
   }
+
+  // Embed assets (genes, capsules) more explicitly if needed, but they are already passed in via previews.
+  // The 'genesPreview' and 'capsulesPreview' contain JSON arrays of relevant assets.
+  // We will ensure they are labeled clearly.
+
+  // [OPTIMIZATION] Compact preview format to reduce token usage and noise
+  let formattedGenes = genesPreview;
+  try {
+    const genes = typeof genesPreview === 'string' ? JSON.parse(genesPreview) : genesPreview;
+    if (Array.isArray(genes) && genes.length > 0) {
+      formattedGenes = genes.map(g => 
+        `- **${g.id}** (${g.category}): ${g.strategy ? g.strategy[0] : 'No strategy'} (Match: ${g.signals_match ? g.signals_match.join(', ') : 'none'})`
+      ).join('\n');
+    } else if (typeof genesPreview !== 'string') {
+        formattedGenes = JSON.stringify(genesPreview, null, 2);
+    }
+  } catch (e) { /* keep raw */ }
+
+  let formattedCapsules = capsulesPreview;
+  try {
+    const caps = typeof capsulesPreview === 'string' ? JSON.parse(capsulesPreview) : capsulesPreview;
+    if (Array.isArray(caps) && caps.length > 0) {
+      formattedCapsules = caps.map(c => 
+        `- **${c.id}** (${c.outcome ? c.outcome.status : 'unknown'}): ${c.summary || 'No summary'} (Gene: ${c.gene})`
+      ).join('\n');
+    } else if (typeof capsulesPreview !== 'string') {
+        formattedCapsules = JSON.stringify(capsulesPreview, null, 2);
+    }
+  } catch (e) { /* keep raw */ }
 
   const basePrompt = `
 GEP — GENOME EVOLUTION PROTOCOL (v1.10.0 STRICT)${cycleLabel} [${nowIso}]
@@ -216,7 +256,12 @@ PHILOSOPHY:
 - Innovate > Maintain: 60% innovation.
 - Robustness: Fix recurring errors permanently.
 - Safety: NEVER delete core skill directories or protected files. Repair, don't destroy.
-- Blast Radius: Prefer small, reversible patches. Large-scale deletions are FORBIDDEN.
+- Blast Radius Control (CRITICAL):
+  * BEFORE editing, count how many files you will touch. If > 80% of max_files, STOP and split into smaller patches.
+  * System hard cap: 60 files / 20000 lines per cycle. Exceeding this causes automatic FAILED + rollback.
+  * Repair operations: fix ONLY the broken file(s). Do NOT reinstall, bulk-copy, or overwrite entire directories.
+  * If a fix requires touching > max_files, split it into multiple cycles or raise the issue in your status report.
+  * Prefer targeted edits over bulk operations. "npm install" that regenerates node_modules does NOT count, but copying a skill directory DOES.
 - Strictness: NO CHITCHAT. NO MARKDOWN WRAPPERS around JSON. Output RAW JSON objects separated by newlines.
 
 CONSTRAINTS:
@@ -252,10 +297,10 @@ Context [Env Fingerprint]:
 ${JSON.stringify(envFingerprint, null, 2)}
 
 Context [Gene Preview] (Reference for Strategy):
-${genesPreview}
+${formattedGenes}
 
 Context [Capsule Preview] (Reference for Past Success):
-${capsulesPreview}
+${formattedCapsules}
 
 Context [Capability Candidates]:
 ${capsPreview}

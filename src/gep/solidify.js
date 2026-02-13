@@ -255,32 +255,58 @@ function isForbiddenPath(relPath, forbiddenPaths) {
   return false;
 }
 
-function checkConstraints({ gene, blast }) {
+function checkConstraints({ gene, blast, blastRadiusEstimate }) {
   const violations = [];
-  if (!gene || gene.type !== 'Gene') return { ok: true, violations };
+  const warnings = [];
+  let blastSeverity = null;
+
+  if (!gene || gene.type !== 'Gene') return { ok: true, violations, warnings, blastSeverity };
   const constraints = gene.constraints || {};
   const maxFiles = Number(constraints.max_files);
-  if (Number.isFinite(maxFiles) && maxFiles > 0) {
-    if (Number(blast.files) > maxFiles) violations.push(`max_files exceeded: ${blast.files} > ${maxFiles}`);
+
+  // --- Blast radius severity classification ---
+  blastSeverity = classifyBlastSeverity({ blast, maxFiles });
+
+  // Hard cap breach is always a violation, regardless of gene config.
+  if (blastSeverity.severity === 'hard_cap_breach') {
+    violations.push(blastSeverity.message);
+    console.error(`[Solidify] ${blastSeverity.message}`);
+  } else if (blastSeverity.severity === 'critical_overrun') {
+    violations.push(blastSeverity.message);
+    // Log directory breakdown for diagnostics.
+    const breakdown = analyzeBlastRadiusBreakdown(blast.all_changed_files || blast.changed_files || []);
+    console.error(`[Solidify] ${blastSeverity.message}`);
+    console.error(`[Solidify] Top contributing directories: ${breakdown.map(function (d) { return d.dir + ' (' + d.files + ')'; }).join(', ')}`);
+  } else if (blastSeverity.severity === 'exceeded') {
+    violations.push(`max_files exceeded: ${blast.files} > ${maxFiles}`);
+  } else if (blastSeverity.severity === 'approaching_limit') {
+    warnings.push(blastSeverity.message);
   }
+
+  // --- Estimate vs actual drift detection ---
+  const estimateComparison = compareBlastEstimate(blastRadiusEstimate, blast);
+  if (estimateComparison && estimateComparison.drifted) {
+    warnings.push(estimateComparison.message);
+    console.log(`[Solidify] WARNING: ${estimateComparison.message}`);
+  }
+
+  // --- Forbidden paths ---
   const forbidden = Array.isArray(constraints.forbidden_paths) ? constraints.forbidden_paths : [];
   for (const f of blast.all_changed_files || blast.changed_files || []) {
     if (isForbiddenPath(f, forbidden)) violations.push(`forbidden_path touched: ${f}`);
   }
-  // Critical protection: reject any evolution that deletes/empties core dependencies.
+
+  // --- Critical protection: reject any evolution that deletes/empties core dependencies ---
   for (const f of blast.all_changed_files || blast.changed_files || []) {
     if (isCriticalProtectedPath(f)) {
-      // Touching a critical file is only a warning, not a violation, UNLESS
-      // the file was deleted or emptied (detected separately).
-      // However, modifying evolver's own source requires high rigor.
       const norm = normalizeRelPath(f);
       if (norm.startsWith('skills/evolver/') && gene.category !== 'repair') {
-        // Only repair-intent genes may touch evolver source.
         violations.push(`critical_path_modified_without_repair_intent: ${norm}`);
       }
     }
   }
-  return { ok: violations.length === 0, violations };
+
+  return { ok: violations.length === 0, violations, warnings, blastSeverity };
 }
 
 function readStateForSolidify() {
@@ -308,6 +334,97 @@ function buildEventId(tsIso) {
 function buildCapsuleId(tsIso) {
   const t = Date.parse(tsIso);
   return `capsule_${Number.isFinite(t) ? t : Date.now()}`;
+}
+
+// --- System-wide blast radius hard caps ---
+// These are absolute maximums that NO gene can override.
+// Even if a gene sets max_files: 1000, the hard cap prevails.
+const BLAST_RADIUS_HARD_CAP_FILES = Number(process.env.EVOLVER_HARD_CAP_FILES) || 60;
+const BLAST_RADIUS_HARD_CAP_LINES = Number(process.env.EVOLVER_HARD_CAP_LINES) || 20000;
+
+// Severity thresholds (as ratios of gene max_files).
+const BLAST_WARN_RATIO = 0.8;   // >80% of limit: warning
+const BLAST_CRITICAL_RATIO = 2.0; // >200% of limit: critical overrun
+
+// Classify blast radius severity relative to a gene's max_files constraint.
+// Returns: { severity, message }
+//   severity: 'within_limit' | 'approaching_limit' | 'exceeded' | 'critical_overrun' | 'hard_cap_breach'
+function classifyBlastSeverity({ blast, maxFiles }) {
+  const files = Number(blast.files) || 0;
+  const lines = Number(blast.lines) || 0;
+
+  // Hard cap breach is always the highest severity -- system-level guard.
+  if (files > BLAST_RADIUS_HARD_CAP_FILES || lines > BLAST_RADIUS_HARD_CAP_LINES) {
+    return {
+      severity: 'hard_cap_breach',
+      message: `HARD CAP BREACH: ${files} files / ${lines} lines exceeds system limit (${BLAST_RADIUS_HARD_CAP_FILES} files / ${BLAST_RADIUS_HARD_CAP_LINES} lines)`,
+    };
+  }
+
+  if (!Number.isFinite(maxFiles) || maxFiles <= 0) {
+    return { severity: 'within_limit', message: 'no max_files constraint defined' };
+  }
+
+  if (files > maxFiles * BLAST_CRITICAL_RATIO) {
+    return {
+      severity: 'critical_overrun',
+      message: `CRITICAL OVERRUN: ${files} files > ${maxFiles * BLAST_CRITICAL_RATIO} (${BLAST_CRITICAL_RATIO}x limit of ${maxFiles}). Agent likely performed bulk/unintended operation.`,
+    };
+  }
+
+  if (files > maxFiles) {
+    return {
+      severity: 'exceeded',
+      message: `max_files exceeded: ${files} > ${maxFiles}`,
+    };
+  }
+
+  if (files > maxFiles * BLAST_WARN_RATIO) {
+    return {
+      severity: 'approaching_limit',
+      message: `approaching limit: ${files} / ${maxFiles} files (${Math.round((files / maxFiles) * 100)}%)`,
+    };
+  }
+
+  return { severity: 'within_limit', message: `${files} / ${maxFiles} files` };
+}
+
+// Analyze which directory prefixes contribute the most changed files.
+// Returns top N directory groups sorted by count descending.
+function analyzeBlastRadiusBreakdown(changedFiles, topN) {
+  const n = Number.isFinite(topN) && topN > 0 ? topN : 5;
+  const dirCount = {};
+  for (const f of Array.isArray(changedFiles) ? changedFiles : []) {
+    const rel = normalizeRelPath(f);
+    if (!rel) continue;
+    // Use first two path segments as the group key (e.g. "skills/feishu-post").
+    const parts = rel.split('/');
+    const key = parts.length >= 2 ? parts.slice(0, 2).join('/') : parts[0];
+    dirCount[key] = (dirCount[key] || 0) + 1;
+  }
+  return Object.entries(dirCount)
+    .sort(function (a, b) { return b[1] - a[1]; })
+    .slice(0, n)
+    .map(function (e) { return { dir: e[0], files: e[1] }; });
+}
+
+// Compare agent's pre-edit estimate against actual blast radius.
+// Returns null if no estimate, or { estimateFiles, actualFiles, ratio, drifted }.
+function compareBlastEstimate(estimate, actual) {
+  if (!estimate || typeof estimate !== 'object') return null;
+  const estFiles = Number(estimate.files);
+  const actFiles = Number(actual.files);
+  if (!Number.isFinite(estFiles) || estFiles <= 0) return null;
+  const ratio = actFiles / estFiles;
+  return {
+    estimateFiles: estFiles,
+    actualFiles: actFiles,
+    ratio: Math.round(ratio * 100) / 100,
+    drifted: ratio > 3 || ratio < 0.1,
+    message: ratio > 3
+      ? `Estimate drift: actual ${actFiles} files is ${ratio.toFixed(1)}x the estimated ${estFiles}. Agent did not plan accurately.`
+      : null,
+  };
 }
 
 // --- Critical skills / paths that evolver must NEVER delete or overwrite ---
@@ -576,7 +693,27 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
     repoRoot,
     baselineUntracked: lastRun && Array.isArray(lastRun.baseline_untracked) ? lastRun.baseline_untracked : [],
   });
-  const constraintCheck = checkConstraints({ gene: geneUsed, blast });
+  const blastRadiusEstimate = lastRun && lastRun.blast_radius_estimate ? lastRun.blast_radius_estimate : null;
+  const constraintCheck = checkConstraints({ gene: geneUsed, blast, blastRadiusEstimate });
+
+  // Log blast radius diagnostics when severity is elevated.
+  if (constraintCheck.blastSeverity &&
+      constraintCheck.blastSeverity.severity !== 'within_limit' &&
+      constraintCheck.blastSeverity.severity !== 'approaching_limit') {
+    const breakdown = analyzeBlastRadiusBreakdown(blast.all_changed_files || blast.changed_files || []);
+    console.error(`[Solidify] Blast radius breakdown: ${JSON.stringify(breakdown)}`);
+    const estComp = compareBlastEstimate(blastRadiusEstimate, blast);
+    if (estComp) {
+      console.error(`[Solidify] Estimate comparison: estimated ${estComp.estimateFiles} files, actual ${estComp.actualFiles} files (${estComp.ratio}x)`);
+    }
+  }
+
+  // Log warnings even on success (approaching limit, estimate drift).
+  if (constraintCheck.warnings && constraintCheck.warnings.length > 0) {
+    for (const w of constraintCheck.warnings) {
+      console.log(`[Solidify] WARNING: ${w}`);
+    }
+  }
 
   // Critical safety: detect destructive changes to core dependencies.
   const destructiveViolations = detectDestructiveChanges({
@@ -662,6 +799,12 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
       },
       constraints_ok: constraintCheck.ok,
       constraint_violations: constraintCheck.violations,
+      constraint_warnings: constraintCheck.warnings || [],
+      blast_severity: constraintCheck.blastSeverity ? constraintCheck.blastSeverity.severity : null,
+      blast_breakdown: (!constraintCheck.ok && blast)
+        ? analyzeBlastRadiusBreakdown(blast.all_changed_files || blast.changed_files || [])
+        : null,
+      blast_estimate_comparison: compareBlastEstimate(blastRadiusEstimate, blast),
       validation_ok: validation.ok,
       validation: validation.results.map(r => ({ cmd: r.cmd, ok: r.ok })),
       validation_report: validationReport,
@@ -740,7 +883,6 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
   if (!dryRun) writeStateForSolidify(state);
 
   // Search-First Evolution: auto-publish eligible capsules to the Hub.
-  // Hub requires Gene + Capsule bundled together (payload.assets = [Gene, Capsule]).
   let publishResult = null;
   if (!dryRun && capsule && capsule.a2a && capsule.a2a.eligible_to_broadcast) {
     const sourceType = lastRun && lastRun.source_type ? String(lastRun.source_type) : 'generated';
@@ -751,50 +893,29 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
     // Skip publishing if: disabled, private, reused asset, or below minimum score
     if (autoPublish && visibility === 'public' && sourceType !== 'reused' && (capsule.outcome.score || 0) >= minPublishScore) {
       try {
-        const { buildPublishBundle, httpTransportSend } = require('./a2aProtocol');
+        const { buildPublish, httpTransportSend } = require('./a2aProtocol');
         const { sanitizePayload } = require('./sanitize');
         const hubUrl = (process.env.A2A_HUB_URL || '').replace(/\/+$/, '');
 
         if (hubUrl) {
-          // Hub requires bundle format: Gene + Capsule together.
-          // geneUsed comes from ensureGene() earlier in solidify().
-          if (!geneUsed || geneUsed.type !== 'Gene') {
-            publishResult = { attempted: false, reason: 'no_gene_available_for_bundle' };
-          } else {
-            const sanitizedCapsule = sanitizePayload(capsule);
-            const sanitizedGene = sanitizePayload(geneUsed);
-            const msg = buildPublishBundle({ gene: sanitizedGene, capsule: sanitizedCapsule, event: event });
-            const result = httpTransportSend(msg, { hubUrl });
-            // httpTransportSend returns a Promise
-            if (result && typeof result.then === 'function') {
-              result
-                .then(function (res) {
-                  if (res && res.ok) {
-                    console.log(`[AutoPublish] Published bundle (Gene: ${geneUsed.id}, Capsule: ${capsule.id}) to Hub.`);
-                  } else {
-                    console.log(`[AutoPublish] Hub rejected bundle: ${JSON.stringify(res)}`);
-                  }
-                })
-                .catch(function (err) {
-                  console.log(`[AutoPublish] Failed (non-fatal): ${err.message}`);
-                });
-            }
-            publishResult = { attempted: true, asset_id: capsule.asset_id || capsule.id, gene_id: geneUsed.asset_id || geneUsed.id, bundle: true };
-
-            // Complete external task if one was active for this run
-            if (lastRun && lastRun.active_task && lastRun.active_task.task_id) {
-              try {
-                const { completeTask } = require('./taskReceiver');
-                completeTask(lastRun.active_task.task_id, capsule.asset_id || capsule.id)
-                  .then(function (ok) {
-                    if (ok) console.log(`[TaskReceiver] Completed task ${lastRun.active_task.task_id}`);
-                  })
-                  .catch(function () {});
-              } catch (taskErr) {
-                // non-fatal
-              }
-            }
+          const sanitized = sanitizePayload(capsule);
+          const msg = buildPublish({ asset: sanitized });
+          const result = httpTransportSend(msg, { hubUrl });
+          // httpTransportSend returns a Promise
+          if (result && typeof result.then === 'function') {
+            result
+              .then(function (res) {
+                if (res && res.ok) {
+                  console.log(`[AutoPublish] Published ${capsule.asset_id || capsule.id} to Hub.`);
+                } else {
+                  console.log(`[AutoPublish] Hub rejected: ${JSON.stringify(res)}`);
+                }
+              })
+              .catch(function (err) {
+                console.log(`[AutoPublish] Failed (non-fatal): ${err.message}`);
+              });
           }
+          publishResult = { attempted: true, asset_id: capsule.asset_id || capsule.id };
         } else {
           publishResult = { attempted: false, reason: 'no_hub_url' };
         }
@@ -821,4 +942,9 @@ module.exports = {
   isValidationCommandAllowed,
   isCriticalProtectedPath,
   detectDestructiveChanges,
+  classifyBlastSeverity,
+  analyzeBlastRadiusBreakdown,
+  compareBlastEstimate,
+  BLAST_RADIUS_HARD_CAP_FILES,
+  BLAST_RADIUS_HARD_CAP_LINES,
 };
