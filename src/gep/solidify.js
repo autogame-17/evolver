@@ -262,7 +262,7 @@ function checkConstraints({ gene, blast, blastRadiusEstimate, repoRoot }) {
 
   if (!gene || gene.type !== 'Gene') return { ok: true, violations, warnings, blastSeverity };
   const constraints = gene.constraints || {};
-  const maxFiles = Number(constraints.max_files);
+  const maxFiles = Math.max(Number(constraints.max_files) || 0, 20);
 
   // --- Blast radius severity classification ---
   blastSeverity = classifyBlastSeverity({ blast, maxFiles });

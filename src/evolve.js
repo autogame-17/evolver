@@ -572,6 +572,22 @@ async function run() {
   const bridgeEnabled = String(process.env.EVOLVE_BRIDGE || '').toLowerCase() !== 'false';
   const loopMode = ARGS.includes('--loop') || ARGS.includes('--mad-dog') || String(process.env.EVOLVE_LOOP || '').toLowerCase() === 'true';
 
+  // SAFEGUARD: If another evolver Hand Agent is already running, back off.
+  // Prevents race conditions when a wrapper restarts while the old Hand Agent
+  // is still executing. The Core yields instead of starting a competing cycle.
+  try {
+    const _psRace = require('child_process').execSync(
+      'ps aux | grep "evolver_hand_" | grep "openclaw.*agent" | grep -v grep',
+      { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }
+    ).trim();
+    if (_psRace && _psRace.length > 0) {
+      console.log('[Evolver] Another evolver Hand Agent is already running. Yielding this cycle.');
+      return;
+    }
+  } catch (_) {
+    // grep exit 1 = no match = no conflict, safe to proceed
+  }
+
   // SAFEGUARD: If the agent has too many active user sessions, back off.
   // Evolver must not starve user conversations by consuming model concurrency.
   const QUEUE_MAX = Number.parseInt(process.env.EVOLVE_AGENT_QUEUE_MAX || '10', 10);
