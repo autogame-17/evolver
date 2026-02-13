@@ -12,6 +12,7 @@ const {
   appendCandidateJsonl,
   readRecentCandidates,
   readRecentExternalCandidates,
+  ensureAssetFiles,
 } = require('./gep/assetStore');
 const { selectGeneAndCapsule, matchPatternToSignals } = require('./gep/selector');
 const { buildGepPrompt, buildReusePrompt, buildHubMatchedBlock } = require('./gep/prompt');
@@ -620,8 +621,41 @@ async function run() {
   const startTime = Date.now();
   console.log('Scanning session logs...');
 
+  // Ensure all GEP asset files exist before any operation.
+  // This prevents "No such file or directory" errors when external tools
+  // (grep, cat, etc.) reference optional append-only files like genes.jsonl.
+  try { ensureAssetFiles(); } catch (e) {
+    console.error(`[AssetInit] ensureAssetFiles failed (non-fatal): ${e.message}`);
+  }
+
   // Maintenance: Clean up old logs to keep directory scan fast
   performMaintenance();
+
+  // --- Repair Loop Circuit Breaker ---
+  // Detect when the evolver is stuck in a "repair -> fail -> repair" cycle.
+  // If the last N events are all failed repairs with the same gene, force
+  // innovation intent to break out of the loop instead of retrying the same fix.
+  const REPAIR_LOOP_THRESHOLD = 3;
+  try {
+    const allEvents = readAllEvents();
+    const recent = Array.isArray(allEvents) ? allEvents.slice(-REPAIR_LOOP_THRESHOLD) : [];
+    if (recent.length >= REPAIR_LOOP_THRESHOLD) {
+      const allRepairFailed = recent.every(e =>
+        e && e.intent === 'repair' &&
+        e.outcome && e.outcome.status === 'failed'
+      );
+      if (allRepairFailed) {
+        const geneIds = recent.map(e => (e.genes_used && e.genes_used[0]) || 'unknown');
+        const sameGene = geneIds.every(id => id === geneIds[0]);
+        console.warn(`[CircuitBreaker] Detected ${REPAIR_LOOP_THRESHOLD} consecutive failed repairs${sameGene ? ` (gene: ${geneIds[0]})` : ''}. Forcing innovation intent to break the loop.`);
+        // Set env flag that downstream code reads to force innovation
+        process.env.FORCE_INNOVATION = 'true';
+      }
+    }
+  } catch (e) {
+    // Non-fatal: if we can't read events, proceed normally
+    console.error(`[CircuitBreaker] Check failed (non-fatal): ${e.message}`);
+  }
 
   const recentMasterLog = readRealSessionLog();
   const todayLog = readRecentLog(TODAY_LOG);

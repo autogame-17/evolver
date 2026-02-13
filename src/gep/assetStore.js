@@ -26,6 +26,17 @@ function writeJsonAtomic(filePath, obj) {
   fs.renameSync(tmp, filePath);
 }
 
+// Build a robust validation command that works regardless of CWD.
+// Resolves module paths relative to the skill root (skills/evolver/).
+function buildValidationCmd(relModules) {
+  const skillRoot = path.resolve(__dirname, '..', '..');
+  const checks = relModules.map(m => {
+    const abs = path.join(skillRoot, m).replace(/\\/g, '/');
+    return `require('${abs}')`;
+  });
+  return `node -e "${checks.join('; ')}; console.log('ok')"`;
+}
+
 function getDefaultGenes() {
   return {
     version: 1,
@@ -44,8 +55,8 @@ function getDefaultGenes() {
         ],
         constraints: { max_files: 12, forbidden_paths: ['.git', 'node_modules'] },
         validation: [
-          'node -e "require(\'./src/evolve\'); require(\'./src/gep/solidify\'); console.log(\'ok\')"',
-          'node -e "require(\'./src/gep/selector\'); require(\'./src/gep/memoryGraph\'); console.log(\'ok\')"',
+          buildValidationCmd(['src/evolve', 'src/gep/solidify']),
+          buildValidationCmd(['src/gep/selector', 'src/gep/memoryGraph']),
         ],
       },
       {
@@ -61,7 +72,7 @@ function getDefaultGenes() {
           'Solidify: record EvolutionEvent, update Gene definitions, create Capsule on success',
         ],
         constraints: { max_files: 20, forbidden_paths: ['.git', 'node_modules'] },
-        validation: ['node -e "require(\'./src/evolve\'); require(\'./src/gep/prompt\'); console.log(\'ok\')"'],
+        validation: [buildValidationCmd(['src/evolve', 'src/gep/prompt'])],
       },
     ],
   };
@@ -223,10 +234,36 @@ function upsertCapsule(capsuleObj) {
   writeJsonAtomic(capsulesPath(), { version: current.version || 1, capsules });
 }
 
+// Ensure all expected asset files exist on startup.
+// Creates empty files for optional append-only stores so that
+// external grep/read commands never fail with "No such file or directory".
+function ensureAssetFiles() {
+  const dir = getGepAssetsDir();
+  ensureDir(dir);
+  const files = [
+    { path: genesPath(), defaultContent: JSON.stringify(getDefaultGenes(), null, 2) + '\n' },
+    { path: capsulesPath(), defaultContent: JSON.stringify(getDefaultCapsules(), null, 2) + '\n' },
+    { path: path.join(dir, 'genes.jsonl'), defaultContent: '' },
+    { path: eventsPath(), defaultContent: '' },
+    { path: candidatesPath(), defaultContent: '' },
+  ];
+  for (const f of files) {
+    if (!fs.existsSync(f.path)) {
+      try {
+        fs.writeFileSync(f.path, f.defaultContent, 'utf8');
+      } catch (e) {
+        // Non-fatal: log but continue
+        console.error(`[AssetStore] Failed to create ${f.path}: ${e.message}`);
+      }
+    }
+  }
+}
+
 module.exports = {
   loadGenes, loadCapsules, readAllEvents, getLastEventId,
   appendEventJsonl, appendCandidateJsonl, appendExternalCandidateJsonl,
   readRecentCandidates, readRecentExternalCandidates,
   upsertGene, appendCapsule, upsertCapsule,
   genesPath, capsulesPath, eventsPath, candidatesPath, externalCandidatesPath,
+  ensureAssetFiles, buildValidationCmd,
 };
