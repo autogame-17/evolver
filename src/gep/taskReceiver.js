@@ -1,27 +1,11 @@
 // ---------------------------------------------------------------------------
-// taskReceiver -- pulls external tasks from Hub and injects them as signals.
-//
-// Called during the evolution loop before normal signal extraction.
-// If a task with a bounty is available, its signals are injected with
-// high priority so the evolver focuses on it.
+// taskReceiver -- pulls external tasks from Hub, auto-claims, and injects
+// them as high-priority signals into the evolution loop.
 // ---------------------------------------------------------------------------
 
-const { getRepoRoot } = require('./paths');
-const path = require('path');
-const fs = require('fs');
+const { getNodeId } = require('./a2aProtocol');
 
 const HUB_URL = process.env.A2A_HUB_URL || process.env.EVOMAP_HUB_URL || 'https://evomap.ai';
-const NODE_ID = process.env.A2A_NODE_ID || null;
-
-function getNodeId() {
-  if (NODE_ID) return NODE_ID;
-  // Try to read from local state
-  try {
-    const stateFile = path.join(getRepoRoot(), '.openclaw', 'node_id');
-    if (fs.existsSync(stateFile)) return fs.readFileSync(stateFile, 'utf8').trim();
-  } catch {}
-  return null;
-}
 
 /**
  * Fetch available tasks from Hub via the A2A fetch endpoint.
@@ -68,6 +52,40 @@ async function fetchTasks() {
 }
 
 /**
+ * Pick the best task from a list. Priority:
+ *   1. Bounty tasks (higher amount first)
+ *   2. Tasks already claimed by this node
+ *   3. Open tasks (newest first)
+ * @param {Array} tasks
+ * @returns {object|null}
+ */
+function selectBestTask(tasks) {
+  if (!Array.isArray(tasks) || tasks.length === 0) return null;
+
+  const nodeId = getNodeId();
+
+  // Already-claimed tasks for this node take top priority (resume work)
+  const myClaimedTask = tasks.find(
+    t => t.status === 'claimed' && t.claimed_by_node_id === nodeId
+  );
+  if (myClaimedTask) return myClaimedTask;
+
+  // Filter to open tasks only
+  const open = tasks.filter(t => t.status === 'open');
+  if (open.length === 0) return null;
+
+  // Prefer bounty tasks, sorted by amount descending
+  const bountyTasks = open.filter(t => t.bounty_id);
+  if (bountyTasks.length > 0) {
+    bountyTasks.sort((a, b) => (b.bounty_amount || 0) - (a.bounty_amount || 0));
+    return bountyTasks[0];
+  }
+
+  // Fallback: newest open task
+  return open[0];
+}
+
+/**
  * Claim a task on the Hub.
  * @param {string} taskId
  * @returns {boolean} true if claim succeeded
@@ -77,7 +95,7 @@ async function claimTask(taskId) {
   if (!nodeId || !taskId) return false;
 
   try {
-    const url = `${HUB_URL.replace(/\/+$/, '')}/task/claim`;
+    const url = `${HUB_URL.replace(/\/+$/, '')}/a2a/task/claim`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
 
@@ -106,7 +124,7 @@ async function completeTask(taskId, assetId) {
   if (!nodeId || !taskId || !assetId) return false;
 
   try {
-    const url = `${HUB_URL.replace(/\/+$/, '')}/task/complete`;
+    const url = `${HUB_URL.replace(/\/+$/, '')}/a2a/task/complete`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
 
@@ -132,12 +150,16 @@ async function completeTask(taskId, assetId) {
 function taskToSignals(task) {
   if (!task) return [];
   const signals = [];
-  // Parse comma-separated signals
   if (task.signals) {
     const parts = String(task.signals).split(',').map(s => s.trim()).filter(Boolean);
     signals.push(...parts);
   }
-  // Add task marker signal
+  if (task.title) {
+    const words = String(task.title).toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+    for (const w of words.slice(0, 5)) {
+      if (!signals.includes(w)) signals.push(w);
+    }
+  }
   signals.push('external_task');
   if (task.bounty_id) signals.push('bounty_task');
   return signals;
@@ -145,6 +167,7 @@ function taskToSignals(task) {
 
 module.exports = {
   fetchTasks,
+  selectBestTask,
   claimTask,
   completeTask,
   taskToSignals,

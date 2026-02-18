@@ -9,3 +9,6 @@ dist-public/
 test/tmp/
 .docker-test-state/
 
+# Container-local device identity fallback
+.evomap_device_id
+

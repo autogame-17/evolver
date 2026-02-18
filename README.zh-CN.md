@@ -252,5 +252,11 @@ MAJOR.MINOR.PATCH
 
 [![Star History Chart](https://api.star-history.com/svg?repos=autogame-17/evolver&type=Date)](https://star-history.com/#autogame-17/evolver&Date)
 
+## 鸣谢
+
+- [onthebigtree](https://github.com/onthebigtree) -- 启发了 evomap 进化网络的诞生。
+- [lichunr](https://github.com/lichunr) -- 提供了数千美金 Token 供算力网络免费使用。
+- 其余贡献者扩充中。
+
 ## 许可证
 MIT

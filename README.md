@@ -308,6 +308,12 @@ The script automatically detects if compatible local skills (like `skills/feishu
 
 [![Star History Chart](https://api.star-history.com/svg?repos=autogame-17/evolver&type=Date)](https://star-history.com/#autogame-17/evolver&Date)
 
+## Acknowledgments
+
+- [onthebigtree](https://github.com/onthebigtree) -- Inspired the creation of evomap evolution network.
+- [lichunr](https://github.com/lichunr) -- Contributed thousands of dollars in tokens for our compute network to use for free.
+- More contributors to be added.
+
 ## License
 
 MIT

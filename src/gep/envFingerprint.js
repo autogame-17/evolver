@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { getRepoRoot } = require('./paths');
+const { getDeviceId, isContainer } = require('./deviceId');
 
 // Capture a structured environment fingerprint.
 // This is embedded into Capsules, EvolutionEvents, and ValidationReports.
@@ -20,13 +21,15 @@ function captureEnvFingerprint() {
   } catch (e) {}
 
   return {
+    device_id: getDeviceId(),
     node_version: process.version,
     platform: process.platform,
     arch: process.arch,
     os_release: os.release(),
+    hostname: os.hostname(),
     evolver_version: pkgVersion,
     cwd: process.cwd(),
-    captured_at: new Date().toISOString(),
+    container: isContainer(),
   };
 }
 
@@ -35,9 +38,11 @@ function captureEnvFingerprint() {
 function envFingerprintKey(fp) {
   if (!fp || typeof fp !== 'object') return 'unknown';
   const parts = [
+    fp.device_id || '',
     fp.node_version || '',
     fp.platform || '',
     fp.arch || '',
+    fp.hostname || '',
     fp.evolver_version || '',
   ].join('|');
   return crypto.createHash('sha256').update(parts, 'utf8').digest('hex').slice(0, 16);

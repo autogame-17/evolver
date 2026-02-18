@@ -1150,7 +1150,41 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
     }
   }
 
-  return { ok: success, event, capsule, gene: geneUsed, constraintCheck, validation, validationReport, blast, publishResult };
+  // --- Auto-complete Hub task ---
+  // If this evolution cycle was driven by a Hub task, mark it as completed
+  // with the produced capsule's asset_id. Runs after publish so the Hub
+  // can link the task result to the published asset.
+  let taskCompleteResult = null;
+  if (!dryRun && success && lastRun && lastRun.active_task_id) {
+    const resultAssetId = capsule && capsule.asset_id ? capsule.asset_id : (capsule && capsule.id ? capsule.id : null);
+    if (resultAssetId) {
+      try {
+        const { completeTask } = require('./taskReceiver');
+        const taskId = String(lastRun.active_task_id);
+        console.log(`[TaskComplete] Completing task "${lastRun.active_task_title || taskId}" with asset ${resultAssetId}`);
+        const completed = completeTask(taskId, resultAssetId);
+        if (completed && typeof completed.then === 'function') {
+          completed
+            .then(function (ok) {
+              if (ok) {
+                console.log('[TaskComplete] Task completed successfully on Hub.');
+              } else {
+                console.log('[TaskComplete] Hub rejected task completion (non-fatal).');
+              }
+            })
+            .catch(function (err) {
+              console.log('[TaskComplete] Failed (non-fatal): ' + (err && err.message ? err.message : err));
+            });
+        }
+        taskCompleteResult = { attempted: true, task_id: taskId, asset_id: resultAssetId };
+      } catch (e) {
+        console.log('[TaskComplete] Error (non-fatal): ' + e.message);
+        taskCompleteResult = { attempted: false, reason: e.message };
+      }
+    }
+  }
+
+  return { ok: success, event, capsule, gene: geneUsed, constraintCheck, validation, validationReport, blast, publishResult, taskCompleteResult };
 }
 
 module.exports = {
