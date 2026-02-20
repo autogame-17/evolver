@@ -189,5 +189,6 @@ module.exports = {
   selectGene,
   selectCapsule,
   buildSelectorDecision,
+  matchPatternToSignals,
 };
 
