@@ -262,7 +262,8 @@ function checkConstraints({ gene, blast, blastRadiusEstimate, repoRoot }) {
 
   if (!gene || gene.type !== 'Gene') return { ok: true, violations, warnings, blastSeverity };
   const constraints = gene.constraints || {};
-  const maxFiles = Math.max(Number(constraints.max_files) || 0, 20);
+  const DEFAULT_MAX_FILES = 20;
+  const maxFiles = Number(constraints.max_files) > 0 ? Number(constraints.max_files) : DEFAULT_MAX_FILES;
 
   // --- Blast radius severity classification ---
   blastSeverity = classifyBlastSeverity({ blast, maxFiles });
@@ -1076,7 +1077,6 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
   // Search-First Evolution: auto-publish eligible capsules to the Hub (as Gene+Capsule bundle).
   let publishResult = null;
   if (!dryRun && capsule && capsule.a2a && capsule.a2a.eligible_to_broadcast) {
-    const sourceType = lastRun && lastRun.source_type ? String(lastRun.source_type) : 'generated';
     const autoPublish = String(process.env.EVOLVER_AUTO_PUBLISH || 'true').toLowerCase() !== 'false';
     const visibility = String(process.env.EVOLVER_DEFAULT_VISIBILITY || 'public').toLowerCase();
     const minPublishScore = Number(process.env.EVOLVER_MIN_PUBLISH_SCORE) || 0.78;

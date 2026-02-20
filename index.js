@@ -104,7 +104,7 @@ async function main() {
         const maxRssMb = parseMs(process.env.EVOLVER_MAX_RSS_MB, 500) || 500;
         const suicideEnabled = String(process.env.EVOLVER_SUICIDE || '').toLowerCase() !== 'false';
 
-        let currentSleepMs = Math.min(maxSleepMs, Math.max(minSleepMs, minSleepMs));
+        let currentSleepMs = minSleepMs;
         let cycleCount = 0;
 
         while (true) {
