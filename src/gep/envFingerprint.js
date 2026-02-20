@@ -26,7 +26,7 @@ function captureEnvFingerprint() {
     platform: process.platform,
     arch: process.arch,
     os_release: os.release(),
-    hostname: os.hostname(),
+    hostname: crypto.createHash('sha256').update(os.hostname()).digest('hex').slice(0, 12),
     evolver_version: pkgVersion,
     cwd: process.cwd(),
     container: isContainer(),

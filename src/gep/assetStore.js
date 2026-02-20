@@ -26,14 +26,11 @@ function writeJsonAtomic(filePath, obj) {
   fs.renameSync(tmp, filePath);
 }
 
-// Build a robust validation command that works regardless of CWD.
-// Resolves module paths relative to the skill root (skills/evolver/).
+// Build a validation command using repo-root-relative paths.
+// runValidations() executes with cwd=repoRoot, so require('./src/...')
+// resolves correctly without embedding machine-specific absolute paths.
 function buildValidationCmd(relModules) {
-  const skillRoot = path.resolve(__dirname, '..', '..');
-  const checks = relModules.map(m => {
-    const abs = path.join(skillRoot, m).replace(/\\/g, '/');
-    return `require('${abs}')`;
-  });
+  const checks = relModules.map(m => `require('./${m}')`);
   return `node -e "${checks.join('; ')}; console.log('ok')"`;
 }
 
@@ -216,14 +213,6 @@ function upsertGene(geneObj) {
   writeJsonAtomic(genesPath(), { version: current.version || 1, genes });
 }
 
-function appendCapsule(capsuleObj) {
-  ensureSchemaFields(capsuleObj);
-  const current = readJsonIfExists(capsulesPath(), getDefaultCapsules());
-  const capsules = Array.isArray(current.capsules) ? current.capsules : [];
-  capsules.push(capsuleObj);
-  writeJsonAtomic(capsulesPath(), { version: current.version || 1, capsules });
-}
-
 function upsertCapsule(capsuleObj) {
   if (!capsuleObj || capsuleObj.type !== 'Capsule' || !capsuleObj.id) return;
   ensureSchemaFields(capsuleObj);
@@ -263,7 +252,7 @@ module.exports = {
   loadGenes, loadCapsules, readAllEvents, getLastEventId,
   appendEventJsonl, appendCandidateJsonl, appendExternalCandidateJsonl,
   readRecentCandidates, readRecentExternalCandidates,
-  upsertGene, appendCapsule, upsertCapsule,
+  upsertGene, upsertCapsule,
   genesPath, capsulesPath, eventsPath, candidatesPath, externalCandidatesPath,
   ensureAssetFiles, buildValidationCmd,
 };
