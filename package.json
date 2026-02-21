@@ -18,6 +18,7 @@
     "start": "node index.js",
     "run": "node index.js run",
     "solidify": "node index.js solidify",
+    "test": "node --test test/*.test.js",
     "a2a:export": "node scripts/a2a_export.js",
     "a2a:ingest": "node scripts/a2a_ingest.js",
     "a2a:promote": "node scripts/a2a_promote.js"
