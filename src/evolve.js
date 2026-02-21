@@ -669,7 +669,12 @@ async function run() {
   }
 
   // Maintenance: Clean up old logs to keep directory scan fast
-  performMaintenance();
+  // Skip maintenance in dry-run mode to avoid side effects (file moves/deletes).
+  if (!IS_DRY_RUN) {
+    performMaintenance();
+  } else {
+    console.log('[Maintenance] Skipped (dry-run mode).');
+  }
 
   // --- Repair Loop Circuit Breaker ---
   // Detect when the evolver is stuck in a "repair -> fail -> repair" cycle.
