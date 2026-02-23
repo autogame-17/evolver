@@ -26,8 +26,8 @@ const REDACT_PATTERNS = [
   /npm_[A-Za-z0-9]{36,}/g,
   // Private keys
   /-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----[\s\S]*?-----END\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----/g,
-  // Basic auth in URLs (user:pass@host)
-  /:\/\/[^@\s]+:[^@\s]+@/g,
+  // Basic auth in URLs (redact only credentials, keep :// and @)
+  /(?<=:\/\/)[^@\s]+:[^@\s]+(?=@)/g,
   // Local filesystem paths
   /\/home\/[^\s"',;)}\]]+/g,
   /\/Users\/[^\s"',;)}\]]+/g,

@@ -53,9 +53,11 @@ assert.ok(redactString('password=mysecretpassword123').includes(REDACTED),
 assert.ok(redactString('PASSWORD: "hunter2xyz"').includes(REDACTED),
   'PASSWORD: should be redacted');
 
-// Basic auth in URLs
-assert.ok(redactString('https://user:pass123@github.com/repo').includes(REDACTED),
-  'basic auth in URL should be redacted');
+// Basic auth in URLs (should preserve scheme and @)
+var urlResult = redactString('https://user:pass123@github.com/repo');
+assert.ok(urlResult.includes(REDACTED), 'basic auth in URL should be redacted');
+assert.ok(urlResult.startsWith('https://'), 'URL scheme should be preserved');
+assert.ok(urlResult.includes('@github.com'), '@ and host should be preserved');
 
 // Safe strings should NOT be redacted
 assert.strictEqual(redactString('hello world'), 'hello world');
@@ -85,4 +87,4 @@ assert.strictEqual(sanitizePayload(undefined), undefined);
 assert.strictEqual(redactString(null), null);
 assert.strictEqual(redactString(123), 123);
 
-console.log('All sanitize tests passed (%d assertions)', 30);
+console.log('All sanitize tests passed (34 assertions)');
