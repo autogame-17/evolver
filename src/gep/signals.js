@@ -16,7 +16,10 @@ var OPPORTUNITY_SIGNALS = [
 function hasOpportunitySignal(signals) {
   var list = Array.isArray(signals) ? signals : [];
   for (var i = 0; i < OPPORTUNITY_SIGNALS.length; i++) {
-    if (list.includes(OPPORTUNITY_SIGNALS[i])) return true;
+    var name = OPPORTUNITY_SIGNALS[i];
+    if (list.includes(name)) return true;
+    // Signals may carry extra as "name:snippet"
+    if (list.some(function (s) { return String(s).startsWith(name + ':'); })) return true;
   }
   return false;
 }
@@ -137,7 +140,6 @@ function extractSignals({ recentSessionTranscript, todayLog, memorySnippet, user
     String(userSnippet || ''),
   ].join('\n');
   var lower = corpus.toLowerCase();
-
   // Analyze recent evolution history for de-duplication
   var history = analyzeRecentHistory(recentEvents || []);
 
@@ -145,7 +147,8 @@ function extractSignals({ recentSessionTranscript, todayLog, memorySnippet, user
 
   // Refined error detection regex to avoid false positives on "fail"/"failed" in normal text.
   // We prioritize structured error markers ([error], error:, exception:) and specific JSON patterns.
-  var errorHit = /\[error\]|error:|exception:|iserror":true|"status":\s*"error"|"status":\s*"failed"/.test(lower);
+  // Chinese: 错误、异常、失败、报错 (common in logs and stack traces).
+  var errorHit = /\[error\]|error:|exception:|iserror":true|"status":\s*"error"|"status":\s*"failed"|错误|异常|报错|失败\s*[：:]/.test(lower);
   if (errorHit) signals.push('log_error');
 
   // Error signature (more reproducible than a coarse "log_error" tag).
@@ -156,7 +159,7 @@ function extractSignals({ recentSessionTranscript, todayLog, memorySnippet, user
       .filter(Boolean);
 
     var errLine =
-      lines.find(function (l) { return /\b(typeerror|referenceerror|syntaxerror)\b\s*:|error\s*:|exception\s*:|\[error/i.test(l); }) ||
+      lines.find(function (l) { return /\b(typeerror|referenceerror|syntaxerror)\b\s*:|error\s*:|exception\s*:|\[error|错误|异常\s*[：:]|报错|失败\s*[：:]/i.test(l); }) ||
       null;
 
     if (errLine) {
@@ -200,31 +203,87 @@ function extractSignals({ recentSessionTranscript, todayLog, memorySnippet, user
   }
 
   // --- Opportunity signals (innovation / feature requests) ---
+  // Support 4 languages: 简中、繁中、英、日. Attach extra info (snippet) for selector/prompt use.
 
-  // user_feature_request: user explicitly asks for a new capability
-  // Look for action verbs + object patterns that indicate a feature request
-  if (/\b(add|implement|create|build|make|develop|write|design)\b[^.?!\n]{3,60}\b(feature|function|module|capability|tool|support|endpoint|command|option|mode)\b/i.test(corpus)) {
-    signals.push('user_feature_request');
+  var featureRequestSnippet = '';
+  // English
+  var featEn = corpus.match(/\b(add|implement|create|build|make|develop|write|design)\b[^.?!\n]{3,120}\b(feature|function|module|capability|tool|support|endpoint|command|option|mode)\b/i);
+  if (featEn) featureRequestSnippet = featEn[0].replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!featureRequestSnippet && /\b(i want|i need|we need|please add|can you add|could you add|let'?s add)\b/i.test(lower)) {
+    var featWant = corpus.match(/.{0,80}\b(i want|i need|we need|please add|can you add|could you add|let'?s add)\b.{0,80}/i);
+    featureRequestSnippet = featWant ? featWant[0].replace(/\s+/g, ' ').trim().slice(0, 200) : 'feature request';
   }
-  // Also catch direct "I want/need X" patterns
-  if (/\b(i want|i need|we need|please add|can you add|could you add|let'?s add)\b/i.test(lower)) {
-    signals.push('user_feature_request');
+  // 简中（含「我想……」：截取描述至 200 字）
+  if (!featureRequestSnippet && /加个|实现一下|做个|想要\s*一个|需要\s*一个|帮我加|帮我开发|加一下|新增一个|加个功能|做个功能|我想/.test(corpus)) {
+    var featZh = corpus.match(/.{0,100}(加个|实现一下|做个|想要\s*一个|需要\s*一个|帮我加|帮我开发|加一下|新增一个|加个功能|做个功能).{0,100}/);
+    if (featZh) featureRequestSnippet = featZh[0].replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!featureRequestSnippet && /我想/.test(corpus)) {
+      var featWantZh = corpus.match(/我想\s*[，,\.。、\s]*([\s\S]{0,400})/);
+      featureRequestSnippet = featWantZh ? (featWantZh[1].replace(/\s+/g, ' ').trim().slice(0, 200) || '功能需求') : '功能需求';
+    }
+    if (!featureRequestSnippet) featureRequestSnippet = '功能需求';
+  }
+  // 繁中
+  if (!featureRequestSnippet && /加個|實現一下|做個|想要一個|請加|新增一個|加個功能|做個功能|幫我加/.test(corpus)) {
+    var featTw = corpus.match(/.{0,100}(加個|實現一下|做個|想要一個|請加|新增一個|加個功能|做個功能|幫我加).{0,100}/);
+    featureRequestSnippet = featTw ? featTw[0].replace(/\s+/g, ' ').trim().slice(0, 200) : '功能需求';
+  }
+  // 日
+  if (!featureRequestSnippet && /追加|実装|作って|機能を|追加して|が欲しい|を追加|してほしい/.test(corpus)) {
+    var featJa = corpus.match(/.{0,100}(追加|実装|作って|機能を|追加して|が欲しい|を追加|してほしい).{0,100}/);
+    featureRequestSnippet = featJa ? featJa[0].replace(/\s+/g, ' ').trim().slice(0, 200) : '機能要望';
+  }
+  if (featureRequestSnippet || /\b(add|implement|create|build|make|develop|write|design)\b[^.?!\n]{3,60}\b(feature|function|module|capability|tool|support|endpoint|command|option|mode)\b/i.test(corpus) ||
+      /\b(i want|i need|we need|please add|can you add|could you add|let'?s add)\b/i.test(lower) ||
+      /加个|实现一下|做个|想要\s*一个|需要\s*一个|帮我加|帮我开发|加一下|新增一个|加个功能|做个功能|我想/.test(corpus) ||
+      /加個|實現一下|做個|想要一個|請加|新增一個|加個功能|做個功能|幫我加/.test(corpus) ||
+      /追加|実装|作って|機能を|追加して|が欲しい|を追加|してほしい/.test(corpus)) {
+    signals.push('user_feature_request:' + (featureRequestSnippet || ''));
   }
 
-  // user_improvement_suggestion: user suggests making something better
-  if (/\b(should be|could be better|improve|enhance|upgrade|refactor|clean up|simplify|streamline)\b/i.test(lower)) {
-    // Only fire if there is no active error (to distinguish from repair requests)
-    if (!errorHit) signals.push('user_improvement_suggestion');
+  // user_improvement_suggestion: 4 languages + extra
+  var improvementSnippet = '';
+  if (!errorHit) {
+    var impEn = lower.match(/.{0,80}\b(should be|could be better|improve|enhance|upgrade|refactor|clean up|simplify|streamline)\b.{0,80}/);
+    if (impEn) improvementSnippet = impEn[0].replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!improvementSnippet && /改进一下|优化一下|简化|重构|整理一下|弄得更好/.test(corpus)) {
+      var impZh = corpus.match(/.{0,100}(改进一下|优化一下|简化|重构|整理一下|弄得更好).{0,100}/);
+      improvementSnippet = impZh ? impZh[0].replace(/\s+/g, ' ').trim().slice(0, 200) : '改进建议';
+    }
+    if (!improvementSnippet && /改進一下|優化一下|簡化|重構|整理一下|弄得更好/.test(corpus)) {
+      var impTw = corpus.match(/.{0,100}(改進一下|優化一下|簡化|重構|整理一下|弄得更好).{0,100}/);
+      improvementSnippet = impTw ? impTw[0].replace(/\s+/g, ' ').trim().slice(0, 200) : '改進建議';
+    }
+    if (!improvementSnippet && /改善|最適化|簡素化|リファクタ|良くして|改良/.test(corpus)) {
+      var impJa = corpus.match(/.{0,100}(改善|最適化|簡素化|リファクタ|良くして|改良).{0,100}/);
+      improvementSnippet = impJa ? impJa[0].replace(/\s+/g, ' ').trim().slice(0, 200) : '改善要望';
+    }
+    var hasImprovement = improvementSnippet ||
+      /\b(should be|could be better|improve|enhance|upgrade|refactor|clean up|simplify|streamline)\b/i.test(lower) ||
+      /改进一下|优化一下|简化|重构|整理一下|弄得更好/.test(corpus) ||
+      /改進一下|優化一下|簡化|重構|整理一下|弄得更好/.test(corpus) ||
+      /改善|最適化|簡素化|リファクタ|良くして|改良/.test(corpus);
+    if (hasImprovement) signals.push('user_improvement_suggestion:' + (improvementSnippet || ''));
   }
 
   // perf_bottleneck: performance issues detected
   if (/\b(slow|timeout|timed?\s*out|latency|bottleneck|took too long|performance issue|high cpu|high memory|oom|out of memory)\b/i.test(lower)) {
     signals.push('perf_bottleneck');
   }
+  // Chinese: 慢/超时/卡顿/性能/内存溢出
+  if (/太慢|超时|卡顿|性能问题|内存溢出|跑不动|很慢/.test(corpus)) {
+    signals.push('perf_bottleneck');
+  }
 
   // capability_gap: something is explicitly unsupported or missing
   if (/\b(not supported|cannot|doesn'?t support|no way to|missing feature|unsupported|not available|not implemented|no support for)\b/i.test(lower)) {
     // Only fire if it is not just a missing file/config signal
+    if (!signals.includes('memory_missing') && !signals.includes('user_missing') && !signals.includes('session_logs_missing')) {
+      signals.push('capability_gap');
+    }
+  }
+  // Chinese: 不支持/没法/无法/没有这个功能
+  if (/不支持|没法|无法\s*实现|没有这个功能|还不支持/.test(corpus)) {
     if (!signals.includes('memory_missing') && !signals.includes('user_missing') && !signals.includes('session_logs_missing')) {
       signals.push('capability_gap');
     }
@@ -273,7 +332,9 @@ function extractSignals({ recentSessionTranscript, todayLog, memorySnippet, user
     var beforeDedup = signals.length;
     signals = signals.filter(function (s) {
       // Normalize signal key for comparison
-      var key = s.startsWith('errsig:') ? 'errsig' : s.startsWith('recurring_errsig') ? 'recurring_errsig' : s;
+      var key = s.startsWith('errsig:') ? 'errsig' : s.startsWith('recurring_errsig') ? 'recurring_errsig'
+        : s.startsWith('user_feature_request:') ? 'user_feature_request' : s.startsWith('user_improvement_suggestion:') ? 'user_improvement_suggestion'
+        : s;
       return !history.suppressedSignals.has(key);
     });
     if (beforeDedup > 0 && signals.length === 0) {

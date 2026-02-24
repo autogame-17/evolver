@@ -45,7 +45,9 @@ var OPPORTUNITY_SIGNALS = [
 function hasOpportunitySignal(signals) {
   var list = Array.isArray(signals) ? signals.map(function (s) { return String(s || ''); }) : [];
   for (var i = 0; i < OPPORTUNITY_SIGNALS.length; i++) {
-    if (list.includes(OPPORTUNITY_SIGNALS[i])) return true;
+    var name = OPPORTUNITY_SIGNALS[i];
+    if (list.includes(name)) return true;
+    if (list.some(function (s) { return s.startsWith(name + ':'); })) return true;
   }
   return false;
 }

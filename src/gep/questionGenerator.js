@@ -145,7 +145,7 @@ function generateQuestions(opts) {
   }
 
   // --- Strategy 5: User feature requests the agent can amplify ---
-  if (signalSet.has('user_feature_request')) {
+  if (signalSet.has('user_feature_request') || signals.some(function (s) { return String(s).startsWith('user_feature_request:'); })) {
     var featureLines = transcript.split('\n').filter(function(l) {
       return /\b(add|implement|create|build|i want|i need|please add)\b/i.test(l);
     });
