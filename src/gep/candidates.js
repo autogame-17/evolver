@@ -95,7 +95,7 @@ function extractCapabilityCandidates({ recentSessionTranscript, signals }) {
   ];
 
   for (const sc of signalCandidates) {
-    if (!signalList.includes(sc.signal)) continue;
+    if (!signalList.some(s => s === sc.signal || s.startsWith(sc.signal + ':'))) continue;
     const evidence = `Signal present: ${sc.signal}`;
     const shape = buildFiveQuestionsShape({ title: sc.title, signals, evidence });
     candidates.push({
