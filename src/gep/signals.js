@@ -52,8 +52,12 @@ function analyzeRecentHistory(recentEvents) {
     var sigs = Array.isArray(evt.signals) ? evt.signals : [];
     for (var k = 0; k < sigs.length; k++) {
       var s = String(sigs[k]);
-      // Normalize: ignore errsig details for frequency counting
-      var key = s.startsWith('errsig:') ? 'errsig' : s.startsWith('recurring_errsig') ? 'recurring_errsig' : s;
+      // Normalize: strip details suffix so frequency keys match dedup filter keys
+      var key = s.startsWith('errsig:') ? 'errsig'
+        : s.startsWith('recurring_errsig') ? 'recurring_errsig'
+        : s.startsWith('user_feature_request:') ? 'user_feature_request'
+        : s.startsWith('user_improvement_suggestion:') ? 'user_improvement_suggestion'
+        : s;
       signalFreq[key] = (signalFreq[key] || 0) + 1;
     }
     var genes = Array.isArray(evt.genes_used) ? evt.genes_used : [];
