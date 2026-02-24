@@ -248,7 +248,7 @@ function extractSignals({ recentSessionTranscript, todayLog, memorySnippet, user
   // user_improvement_suggestion: 4 languages + extra
   var improvementSnippet = '';
   if (!errorHit) {
-    var impEn = lower.match(/.{0,80}\b(should be|could be better|improve|enhance|upgrade|refactor|clean up|simplify|streamline)\b.{0,80}/);
+    var impEn = corpus.match(/.{0,80}\b(should be|could be better|improve|enhance|upgrade|refactor|clean up|simplify|streamline)\b.{0,80}/i);
     if (impEn) improvementSnippet = impEn[0].replace(/\s+/g, ' ').trim().slice(0, 200);
     if (!improvementSnippet && /改进一下|优化一下|简化|重构|整理一下|弄得更好/.test(corpus)) {
       var impZh = corpus.match(/.{0,100}(改进一下|优化一下|简化|重构|整理一下|弄得更好).{0,100}/);
