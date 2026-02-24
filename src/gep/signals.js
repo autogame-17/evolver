@@ -151,8 +151,8 @@ function extractSignals({ recentSessionTranscript, todayLog, memorySnippet, user
 
   // Refined error detection regex to avoid false positives on "fail"/"failed" in normal text.
   // We prioritize structured error markers ([error], error:, exception:) and specific JSON patterns.
-  // Chinese: 错误、异常、失败、报错 (common in logs and stack traces).
-  var errorHit = /\[error\]|error:|exception:|iserror":true|"status":\s*"error"|"status":\s*"failed"|错误|异常\s*[：:]|报错|失败\s*[：:]/.test(lower);
+  // Chinese: 错误、异常、失败、报错 — all require contextual colon [：:] so improvement text (e.g. "改进一下错误处理") is not treated as log_error.
+  var errorHit = /\[error\]|error:|exception:|iserror":true|"status":\s*"error"|"status":\s*"failed"|错误\s*[：:]|异常\s*[：:]|报错\s*[：:]|失败\s*[：:]/.test(lower);
   if (errorHit) signals.push('log_error');
 
   // Error signature (more reproducible than a coarse "log_error" tag).
@@ -163,7 +163,7 @@ function extractSignals({ recentSessionTranscript, todayLog, memorySnippet, user
       .filter(Boolean);
 
     var errLine =
-      lines.find(function (l) { return /\b(typeerror|referenceerror|syntaxerror)\b\s*:|error\s*:|exception\s*:|\[error|错误|异常\s*[：:]|报错|失败\s*[：:]/i.test(l); }) ||
+      lines.find(function (l) { return /\b(typeerror|referenceerror|syntaxerror)\b\s*:|error\s*:|exception\s*:|\[error|错误\s*[：:]|异常\s*[：:]|报错\s*[：:]|失败\s*[：:]/i.test(l); }) ||
       null;
 
     if (errLine) {
