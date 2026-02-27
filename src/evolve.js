@@ -608,6 +608,24 @@ function getSystemLoad() {
   }
 }
 
+// Calculate intelligent default load threshold based on CPU cores
+// Rule of thumb (感谢晓雷的建议):
+// - Single-core: 0.8-1.0 (use 0.9)
+// - Multi-core: cores × 0.8-1.0 (use 0.9)
+// - Production: reserve 20% headroom for burst traffic
+function getDefaultLoadMax() {
+  const cpuCount = os.cpus().length;
+  
+  if (cpuCount === 1) {
+    // Single-core machine: use conservative threshold
+    return 0.9;
+  } else {
+    // Multi-core machine: cores × 0.9
+    // Examples: 4 cores → 3.6, 8 cores → 7.2, 16 cores → 14.4
+    return cpuCount * 0.9;
+  }
+}
+
 // Check how many agent sessions are actively being processed (modified in the last N minutes).
 // If the agent is busy with user conversations, evolver should back off.
 function getRecentActiveSessionCount(windowMs) {
@@ -665,14 +683,15 @@ async function run() {
   // When system load is too high (e.g. too many concurrent processes, heavy I/O),
   // back off to prevent the evolver from contributing to load spikes.
   // Echo-MingXuan's Cycle #55 saw load spike from 0.02-0.50 to 1.30 before crash.
-  const LOAD_MAX = parseFloat(process.env.EVOLVE_LOAD_MAX || '2.0');
+  const LOAD_MAX = parseFloat(process.env.EVOLVE_LOAD_MAX || String(getDefaultLoadMax()));
   const sysLoad = getSystemLoad();
   if (sysLoad.load1m > LOAD_MAX) {
-    console.log(`[Evolver] System load ${sysLoad.load1m.toFixed(2)} exceeds max ${LOAD_MAX}. Backing off ${QUEUE_BACKOFF_MS}ms.`);
+    console.log(`[Evolver] System load ${sysLoad.load1m.toFixed(2)} exceeds max ${LOAD_MAX.toFixed(1)} (auto-calculated for ${os.cpus().length} cores). Backing off ${QUEUE_BACKOFF_MS}ms.`);
     writeDormantHypothesis({
       backoff_reason: 'system_load_exceeded',
       system_load: { load1m: sysLoad.load1m, load5m: sysLoad.load5m, load15m: sysLoad.load15m },
       load_max: LOAD_MAX,
+      cpu_cores: os.cpus().length,
     });
     await sleepMs(QUEUE_BACKOFF_MS);
     return;
