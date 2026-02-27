@@ -573,6 +573,7 @@ function isValidationCommandAllowed(cmd) {
   if (/`|\$\(/.test(c)) return false;
   const stripped = c.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
   if (/[;&|><]/.test(stripped)) return false;
+  if (/^node\s+(-e|--eval|--print|-p)\b/.test(c)) return false;
   return true;
 }
 
