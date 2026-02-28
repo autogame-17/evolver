@@ -96,8 +96,7 @@
         "max_files": 25,
         "forbidden_paths": [
           ".git",
-          "node_modules",
-          "assets/gep/events.jsonl"
+          "node_modules"
         ]
       },
       "validation": [
@@ -106,4 +105,3 @@
     }
   ]
 }
-
