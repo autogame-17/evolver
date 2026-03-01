@@ -170,8 +170,17 @@ function buildPublishBundle(opts) {
   var nodeSecret = process.env.A2A_NODE_SECRET || getNodeId();
   var signatureInput = [geneAssetId, capsuleAssetId].sort().join('|');
   var signature = crypto.createHmac('sha256', nodeSecret).update(signatureInput).digest('hex');
+  if (o.modelName && typeof o.modelName === 'string') {
+    gene.model_name = o.modelName;
+    capsule.model_name = o.modelName;
+  }
   var assets = [gene, capsule];
-  if (event && event.type === 'EvolutionEvent') assets.push(event);
+  if (event && event.type === 'EvolutionEvent') {
+    if (o.modelName && typeof o.modelName === 'string') {
+      event.model_name = o.modelName;
+    }
+    assets.push(event);
+  }
   var publishPayload = {
     assets: assets,
     signature: signature,

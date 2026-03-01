@@ -763,6 +763,50 @@ function buildSuccessReason({ gene, signals, blast, mutation, score }) {
   return parts.join(' ').slice(0, 1000) || 'Evolution succeeded.';
 }
 
+var CAPSULE_CONTENT_MAX_CHARS = 8000;
+
+function buildCapsuleContent({ intent, gene, signals, blast, mutation, score }) {
+  var parts = [];
+
+  if (intent) {
+    parts.push('Intent: ' + String(intent).slice(0, 500));
+  }
+
+  if (gene && gene.id) {
+    parts.push('Gene: ' + gene.id + ' (' + (gene.category || 'unknown') + ')');
+  }
+
+  if (signals && signals.length > 0) {
+    parts.push('Signals: ' + signals.slice(0, 8).join(', '));
+  }
+
+  if (gene && Array.isArray(gene.strategy) && gene.strategy.length > 0) {
+    parts.push('Strategy:\n' + gene.strategy.map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n'));
+  }
+
+  if (blast) {
+    var fileList = blast.changed_files || blast.all_changed_files || [];
+    parts.push('Scope: ' + blast.files + ' file(s), ' + blast.lines + ' line(s)');
+    if (fileList.length > 0) {
+      parts.push('Changed files:\n' + fileList.slice(0, 20).join('\n'));
+    }
+  }
+
+  if (mutation && mutation.rationale) {
+    parts.push('Rationale: ' + String(mutation.rationale).slice(0, 500));
+  }
+
+  if (typeof score === 'number') {
+    parts.push('Outcome score: ' + score.toFixed(2));
+  }
+
+  var result = parts.join('\n\n');
+  if (result.length > CAPSULE_CONTENT_MAX_CHARS) {
+    result = result.slice(0, CAPSULE_CONTENT_MAX_CHARS) + '\n... [TRUNCATED]';
+  }
+  return result || 'Evolution completed successfully.';
+}
+
 // ---------------------------------------------------------------------------
 // Epigenetic Marks -- environmental imprints on Gene expression
 // ---------------------------------------------------------------------------
@@ -880,7 +924,7 @@ function buildAutoGene({ signals, intent }) {
         'skills/git-sync',
       ],
     },
-    validation: ['node -e "require(\'./src/gep/solidify\'); console.log(\'ok\')"'],
+    validation: ['node scripts/validate-modules.js ./src/gep/solidify'],
     epigenetic_marks: [], // Epigenetic marks: environment-specific expression modifiers
   };
   gene.asset_id = computeAssetId(gene);
@@ -1108,6 +1152,10 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
       }
     } catch (e) {}
     const successReason = buildSuccessReason({ gene: geneUsed, signals, blast, mutation, score });
+    const capsuleDiff = captureDiffSnapshot(repoRoot);
+    const capsuleContent = buildCapsuleContent({ intent, gene: geneUsed, signals, blast, mutation, score });
+    const capsuleStrategy = geneUsed && Array.isArray(geneUsed.strategy) && geneUsed.strategy.length > 0
+      ? geneUsed.strategy : undefined;
     capsule = {
       type: 'Capsule',
       schema_version: SCHEMA_VERSION,
@@ -1124,6 +1172,9 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
       source_type: sourceType,
       reused_asset_id: reusedAssetId,
       a2a: { eligible_to_broadcast: false },
+      content: capsuleContent,
+      diff: capsuleDiff || undefined,
+      strategy: capsuleStrategy,
     };
     capsule.asset_id = computeAssetId(capsule);
   }
@@ -1251,11 +1302,14 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
 
           var publishChainId = reusedChainId || null;
 
+          var evolverModelName = (process.env.EVOLVER_MODEL_NAME || '').trim().slice(0, 100);
+
           var msg = buildPublishBundle({
             gene: publishGene,
             capsule: sanitizedCapsule,
             event: sanitizedEvent,
             chainId: publishChainId,
+            modelName: evolverModelName || undefined,
           });
           var result = httpTransportSend(msg, { hubUrl });
           // httpTransportSend returns a Promise
@@ -1323,7 +1377,8 @@ function solidify({ intent, summary, dryRun = false, rollbackOnFailure = true } 
           a2a: { eligible_to_broadcast: false },
         };
         apCapsule.asset_id = computeAssetId(apCapsule);
-        var apMsg = buildApBundle({ gene: apGene, capsule: sanitizeAp(apCapsule), event: null });
+        var apModelName = (process.env.EVOLVER_MODEL_NAME || '').trim().slice(0, 100);
+        var apMsg = buildApBundle({ gene: apGene, capsule: sanitizeAp(apCapsule), event: null, modelName: apModelName || undefined });
         var apResult = httpApSend(apMsg, { hubUrl });
         if (apResult && typeof apResult.then === 'function') {
           apResult

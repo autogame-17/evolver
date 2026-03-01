@@ -302,7 +302,6 @@ function checkSystemHealth() {
   // Integration Health Checks (Env Vars)
   try {
     const issues = [];
-    if (!process.env.GEMINI_API_KEY) issues.push('Gemini Key Missing');
 
     // Generic Integration Status Check (Decoupled)
     if (process.env.INTEGRATION_STATUS_CMD) {
@@ -1008,7 +1007,12 @@ async function run() {
     }
 
     if (hubTasks.length > 0) {
-      const best = selectBestTask(hubTasks);
+      let taskMemoryEvents = [];
+      try {
+        const { tryReadMemoryGraphEvents } = require('./gep/memoryGraph');
+        taskMemoryEvents = tryReadMemoryGraphEvents(1000);
+      } catch {}
+      const best = selectBestTask(hubTasks, taskMemoryEvents);
       if (best) {
         const alreadyClaimed = best.status === 'claimed';
         const claimed = alreadyClaimed || await claimTask(best.id || best.task_id);

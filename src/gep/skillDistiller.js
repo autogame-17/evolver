@@ -3,12 +3,7 @@
 var fs = require('fs');
 var path = require('path');
 var crypto = require('crypto');
-var https = require('https');
 var paths = require('./paths');
-
-var GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-var GEMINI_ENDPOINT = 'generativelanguage.googleapis.com';
-var GEMINI_TIMEOUT_MS = parseInt(process.env.GEMINI_TIMEOUT_MS || '60000', 10) || 60000;
 
 var DISTILLER_MIN_CAPSULES = parseInt(process.env.DISTILLER_MIN_CAPSULES || '10', 10) || 10;
 var DISTILLER_INTERVAL_HOURS = parseInt(process.env.DISTILLER_INTERVAL_HOURS || '24', 10) || 24;
@@ -198,58 +193,8 @@ function analyzePatterns(data) {
 }
 
 // ---------------------------------------------------------------------------
-// Step 3: synthesizeGene (LLM)
+// Step 3: LLM response parsing
 // ---------------------------------------------------------------------------
-function callGemini(prompt) {
-  var apiKey = process.env.GEMINI_API_KEY || '';
-  if (!apiKey) return Promise.reject(new Error('GEMINI_API_KEY not set'));
-
-  var body = JSON.stringify({
-    contents: [{ parts: [{ text: String(prompt) }] }],
-    generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
-  });
-
-  var options = {
-    hostname: GEMINI_ENDPOINT,
-    path: '/v1beta/models/' + GEMINI_MODEL + ':generateContent',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-      'Content-Length': Buffer.byteLength(body),
-    },
-    timeout: GEMINI_TIMEOUT_MS,
-  };
-
-  return new Promise(function (resolve, reject) {
-    var req = https.request(options, function (res) {
-      var chunks = [];
-      res.on('data', function (chunk) { chunks.push(chunk); });
-      res.on('end', function () {
-        var raw = Buffer.concat(chunks).toString('utf8');
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          return reject(new Error('Gemini API error ' + res.statusCode + ': ' + raw.slice(0, 500)));
-        }
-        try {
-          var json = JSON.parse(raw);
-          var text = '';
-          if (json.candidates && json.candidates[0] && json.candidates[0].content) {
-            var parts = json.candidates[0].content.parts || [];
-            for (var i = 0; i < parts.length; i++) { if (parts[i].text) text += parts[i].text; }
-          }
-          resolve(text);
-        } catch (e) {
-          reject(new Error('Gemini response parse error: ' + e.message));
-        }
-      });
-    });
-    req.on('error', function (e) { reject(e); });
-    req.on('timeout', function () { req.destroy(); reject(new Error('Gemini API timeout after ' + GEMINI_TIMEOUT_MS + 'ms')); });
-    req.write(body);
-    req.end();
-  });
-}
-
 function extractJsonFromLlmResponse(text) {
   var str = String(text || '');
   var buffer = '';
@@ -305,13 +250,8 @@ function buildDistillationPrompt(analysis, existingGenes, sampleCapsules) {
   ].join('\n');
 }
 
-function synthesizeGene(analysis, existingGenes, sampleCapsules) {
-  var prompt = buildDistillationPrompt(analysis, existingGenes, sampleCapsules);
-  return callGemini(prompt).then(function (text) {
-    var gene = extractJsonFromLlmResponse(text);
-    if (!gene) throw new Error('LLM did not return a valid Gene JSON');
-    return gene;
-  });
+function distillRequestPath() {
+  return path.join(paths.getMemoryDir(), 'distill_request.json');
 }
 
 // ---------------------------------------------------------------------------
@@ -409,23 +349,23 @@ function shouldDistill() {
 }
 
 // ---------------------------------------------------------------------------
-// Step 5: runDistillation (main entry)
+// Step 5a: prepareDistillation -- collect data, build prompt, write to file
 // ---------------------------------------------------------------------------
-function runDistillation() {
-  console.log('[Distiller] Starting skill distillation...');
+function prepareDistillation() {
+  console.log('[Distiller] Preparing skill distillation...');
 
   var data = collectDistillationData();
   console.log('[Distiller] Collected ' + data.successCapsules.length + ' successful capsules across ' + Object.keys(data.grouped).length + ' gene groups.');
 
   if (data.successCapsules.length < DISTILLER_MIN_CAPSULES) {
     console.log('[Distiller] Not enough successful capsules (' + data.successCapsules.length + ' < ' + DISTILLER_MIN_CAPSULES + '). Skipping.');
-    return Promise.resolve({ ok: false, reason: 'insufficient_data' });
+    return { ok: false, reason: 'insufficient_data' };
   }
 
   var state = readDistillerState();
   if (state.last_data_hash === data.dataHash) {
     console.log('[Distiller] Data unchanged since last distillation (hash: ' + data.dataHash + '). Skipping.');
-    return Promise.resolve({ ok: false, reason: 'idempotent_skip' });
+    return { ok: false, reason: 'idempotent_skip' };
   }
 
   var analysis = analyzePatterns(data);
@@ -435,80 +375,123 @@ function runDistillation() {
   var existingGenesJson = readJsonIfExists(path.join(assetsDir, 'genes.json'), { genes: [] });
   var existingGenes = existingGenesJson.genes || [];
 
-  return synthesizeGene(analysis, existingGenes, data.successCapsules)
-    .then(function (rawGene) {
-      var validation = validateSynthesizedGene(rawGene, existingGenes);
+  var prompt = buildDistillationPrompt(analysis, existingGenes, data.successCapsules);
 
-      var logEntry = {
-        timestamp: new Date().toISOString(),
-        data_hash: data.dataHash,
-        input_capsule_count: data.successCapsules.length,
-        analysis_summary: {
-          high_frequency_count: analysis.high_frequency.length,
-          drift_count: analysis.strategy_drift.length,
-          gap_count: analysis.coverage_gaps.length,
-          success_rate: Math.round(analysis.success_rate * 100) / 100,
-        },
-        synthesized_gene_id: validation.gene ? validation.gene.id : null,
-        validation_passed: validation.valid,
-        validation_errors: validation.errors,
-      };
+  var memDir = paths.getMemoryDir();
+  ensureDir(memDir);
+  var promptFileName = 'distill_prompt_' + Date.now() + '.txt';
+  var promptPath = path.join(memDir, promptFileName);
+  fs.writeFileSync(promptPath, prompt, 'utf8');
 
-      if (!validation.valid) {
-        logEntry.status = 'validation_failed';
-        appendJsonl(distillerLogPath(), logEntry);
-        console.warn('[Distiller] Gene failed validation: ' + validation.errors.join(', '));
-        return { ok: false, reason: 'validation_failed', errors: validation.errors };
-      }
+  var reqPath = distillRequestPath();
+  var requestData = {
+    type: 'DistillationRequest',
+    created_at: new Date().toISOString(),
+    prompt_path: promptPath,
+    data_hash: data.dataHash,
+    input_capsule_count: data.successCapsules.length,
+    analysis_summary: {
+      high_frequency_count: analysis.high_frequency.length,
+      drift_count: analysis.strategy_drift.length,
+      gap_count: analysis.coverage_gaps.length,
+      success_rate: Math.round(analysis.success_rate * 100) / 100,
+    },
+  };
+  fs.writeFileSync(reqPath, JSON.stringify(requestData, null, 2) + '\n', 'utf8');
 
-      var gene = validation.gene;
-      gene._distilled_meta = {
-        distilled_at: new Date().toISOString(),
-        source_capsule_count: data.successCapsules.length,
-        data_hash: data.dataHash,
-      };
+  console.log('[Distiller] Prompt written to: ' + promptPath);
+  return { ok: true, promptPath: promptPath, requestPath: reqPath, dataHash: data.dataHash };
+}
 
-      var assetStore = require('./assetStore');
-      assetStore.upsertGene(gene);
-      console.log('[Distiller] Gene "' + gene.id + '" written to genes.json.');
+// ---------------------------------------------------------------------------
+// Step 5b: completeDistillation -- validate LLM response and save gene
+// ---------------------------------------------------------------------------
+function completeDistillation(responseText) {
+  var reqPath = distillRequestPath();
+  var request = readJsonIfExists(reqPath, null);
 
-      state.last_distillation_at = new Date().toISOString();
-      state.last_data_hash = data.dataHash;
-      state.last_gene_id = gene.id;
-      state.distillation_count = (state.distillation_count || 0) + 1;
-      writeDistillerState(state);
+  if (!request) {
+    console.warn('[Distiller] No pending distillation request found.');
+    return { ok: false, reason: 'no_request' };
+  }
 
-      logEntry.status = 'success';
-      logEntry.gene = gene;
-      appendJsonl(distillerLogPath(), logEntry);
-
-      console.log('[Distiller] Distillation complete. New gene: ' + gene.id);
-      return { ok: true, gene: gene };
-    })
-    .catch(function (err) {
-      appendJsonl(distillerLogPath(), {
-        timestamp: new Date().toISOString(),
-        data_hash: data.dataHash,
-        status: 'error',
-        error: err.message || String(err),
-      });
-      console.error('[Distiller] Synthesis failed: ' + (err.message || err));
-      return { ok: false, reason: 'llm_error', error: err.message };
+  var rawGene = extractJsonFromLlmResponse(responseText);
+  if (!rawGene) {
+    appendJsonl(distillerLogPath(), {
+      timestamp: new Date().toISOString(),
+      data_hash: request.data_hash,
+      status: 'error',
+      error: 'LLM response did not contain a valid Gene JSON',
     });
+    console.error('[Distiller] LLM response did not contain a valid Gene JSON.');
+    return { ok: false, reason: 'no_gene_in_response' };
+  }
+
+  var assetsDir = paths.getGepAssetsDir();
+  var existingGenesJson = readJsonIfExists(path.join(assetsDir, 'genes.json'), { genes: [] });
+  var existingGenes = existingGenesJson.genes || [];
+
+  var validation = validateSynthesizedGene(rawGene, existingGenes);
+
+  var logEntry = {
+    timestamp: new Date().toISOString(),
+    data_hash: request.data_hash,
+    input_capsule_count: request.input_capsule_count,
+    analysis_summary: request.analysis_summary,
+    synthesized_gene_id: validation.gene ? validation.gene.id : null,
+    validation_passed: validation.valid,
+    validation_errors: validation.errors,
+  };
+
+  if (!validation.valid) {
+    logEntry.status = 'validation_failed';
+    appendJsonl(distillerLogPath(), logEntry);
+    console.warn('[Distiller] Gene failed validation: ' + validation.errors.join(', '));
+    return { ok: false, reason: 'validation_failed', errors: validation.errors };
+  }
+
+  var gene = validation.gene;
+  gene._distilled_meta = {
+    distilled_at: new Date().toISOString(),
+    source_capsule_count: request.input_capsule_count,
+    data_hash: request.data_hash,
+  };
+
+  var assetStore = require('./assetStore');
+  assetStore.upsertGene(gene);
+  console.log('[Distiller] Gene "' + gene.id + '" written to genes.json.');
+
+  var state = readDistillerState();
+  state.last_distillation_at = new Date().toISOString();
+  state.last_data_hash = request.data_hash;
+  state.last_gene_id = gene.id;
+  state.distillation_count = (state.distillation_count || 0) + 1;
+  writeDistillerState(state);
+
+  logEntry.status = 'success';
+  logEntry.gene = gene;
+  appendJsonl(distillerLogPath(), logEntry);
+
+  try { fs.unlinkSync(reqPath); } catch (e) {}
+  try { if (request.prompt_path) fs.unlinkSync(request.prompt_path); } catch (e) {}
+
+  console.log('[Distiller] Distillation complete. New gene: ' + gene.id);
+  return { ok: true, gene: gene };
 }
 
 module.exports = {
   collectDistillationData: collectDistillationData,
   analyzePatterns: analyzePatterns,
-  synthesizeGene: synthesizeGene,
+  prepareDistillation: prepareDistillation,
+  completeDistillation: completeDistillation,
   validateSynthesizedGene: validateSynthesizedGene,
   shouldDistill: shouldDistill,
-  runDistillation: runDistillation,
   buildDistillationPrompt: buildDistillationPrompt,
   extractJsonFromLlmResponse: extractJsonFromLlmResponse,
   computeDataHash: computeDataHash,
   distillerLogPath: distillerLogPath,
   distillerStatePath: distillerStatePath,
+  distillRequestPath: distillRequestPath,
   readDistillerState: readDistillerState,
   writeDistillerState: writeDistillerState,
   DISTILLED_ID_PREFIX: DISTILLED_ID_PREFIX,

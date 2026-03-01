@@ -12,6 +12,9 @@ const {
   extractJsonFromLlmResponse,
   computeDataHash,
   shouldDistill,
+  prepareDistillation,
+  completeDistillation,
+  distillRequestPath,
   readDistillerState,
   writeDistillerState,
   DISTILLED_ID_PREFIX,
@@ -355,5 +358,129 @@ describe('distiller state persistence', () => {
     var loaded = readDistillerState();
     assert.equal(loaded.last_data_hash, 'abc123');
     assert.equal(loaded.distillation_count, 3);
+  });
+});
+
+describe('prepareDistillation', () => {
+  beforeEach(setupTempEnv);
+  afterEach(teardownTempEnv);
+
+  it('returns insufficient_data when not enough capsules', () => {
+    writeCapsules([makeCapsule('c1', 'gene_a', 'success', 0.9)]);
+    var result = prepareDistillation();
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'insufficient_data');
+  });
+
+  it('writes prompt and request files when conditions met', () => {
+    var caps = [];
+    for (var i = 0; i < 12; i++) {
+      caps.push(makeCapsule('c' + i, 'gene_a', 'success', 0.9));
+    }
+    writeCapsules(caps);
+    writeDistillerState({});
+    writeGenes([]);
+
+    var result = prepareDistillation();
+    assert.equal(result.ok, true);
+    assert.ok(result.promptPath);
+    assert.ok(result.requestPath);
+    assert.ok(fs.existsSync(result.promptPath));
+    assert.ok(fs.existsSync(result.requestPath));
+
+    var prompt = fs.readFileSync(result.promptPath, 'utf8');
+    assert.ok(prompt.includes('Gene synthesis engine'));
+
+    var request = JSON.parse(fs.readFileSync(result.requestPath, 'utf8'));
+    assert.equal(request.type, 'DistillationRequest');
+    assert.equal(request.input_capsule_count, 12);
+  });
+
+  it('returns idempotent_skip after completeDistillation with same data', () => {
+    var caps = [];
+    for (var i = 0; i < 12; i++) {
+      caps.push(makeCapsule('c' + i, 'gene_a', 'success', 0.9));
+    }
+    writeCapsules(caps);
+    writeGenes([]);
+    writeDistillerState({});
+
+    var prep = prepareDistillation();
+    assert.equal(prep.ok, true);
+
+    var llmResponse = JSON.stringify({
+      type: 'Gene', id: 'gene_distilled_idem', category: 'repair',
+      signals_match: ['error'], strategy: ['fix it'],
+      constraints: { max_files: 5, forbidden_paths: ['.git', 'node_modules'] },
+    });
+    var complete = completeDistillation(llmResponse);
+    assert.equal(complete.ok, true);
+
+    var second = prepareDistillation();
+    assert.equal(second.ok, false);
+    assert.equal(second.reason, 'idempotent_skip');
+  });
+});
+
+describe('completeDistillation', () => {
+  beforeEach(setupTempEnv);
+  afterEach(teardownTempEnv);
+
+  it('returns no_request when no pending request', () => {
+    var result = completeDistillation('{"type":"Gene"}');
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'no_request');
+  });
+
+  it('returns no_gene_in_response for invalid LLM output', () => {
+    var caps = [];
+    for (var i = 0; i < 12; i++) {
+      caps.push(makeCapsule('c' + i, 'gene_a', 'success', 0.9));
+    }
+    writeCapsules(caps);
+    writeDistillerState({});
+    writeGenes([]);
+
+    var prep = prepareDistillation();
+    assert.equal(prep.ok, true);
+
+    var result = completeDistillation('No valid JSON here');
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'no_gene_in_response');
+  });
+
+  it('validates and saves gene from valid LLM response', () => {
+    var caps = [];
+    for (var i = 0; i < 12; i++) {
+      caps.push(makeCapsule('c' + i, 'gene_a', 'success', 0.9));
+    }
+    writeCapsules(caps);
+    writeDistillerState({});
+    writeGenes([]);
+
+    var prep = prepareDistillation();
+    assert.equal(prep.ok, true);
+
+    var llmResponse = JSON.stringify({
+      type: 'Gene',
+      id: 'gene_distilled_test_complete',
+      category: 'repair',
+      signals_match: ['error', 'crash'],
+      strategy: ['Identify the failing module', 'Apply targeted fix', 'Run validation'],
+      constraints: { max_files: 5, forbidden_paths: ['.git', 'node_modules'] },
+      validation: ['node test.js'],
+    });
+
+    var result = completeDistillation(llmResponse);
+    assert.equal(result.ok, true);
+    assert.ok(result.gene);
+    assert.equal(result.gene.type, 'Gene');
+    assert.ok(result.gene.id.startsWith('gene_distilled_'));
+
+    var state = readDistillerState();
+    assert.ok(state.last_distillation_at);
+    assert.equal(state.distillation_count, 1);
+
+    assert.ok(!fs.existsSync(distillRequestPath()));
   });
 });

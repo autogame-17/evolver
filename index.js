@@ -223,15 +223,17 @@ async function main() {
 
       if (res && res.ok && !dryRun) {
         try {
-          const { shouldDistill, runDistillation } = require('./src/gep/skillDistiller');
+          const { shouldDistill, prepareDistillation } = require('./src/gep/skillDistiller');
           if (shouldDistill()) {
-            runDistillation()
-              .then(function (dr) {
-                if (dr && dr.ok) console.log('[Distiller] Produced gene: ' + dr.gene.id);
-              })
-              .catch(function (e) { console.warn('[Distiller] ' + (e.message || e)); })
-              .finally(function () { process.exit(0); });
-            return;
+            const dr = prepareDistillation();
+            if (dr && dr.ok && dr.promptPath) {
+              console.log('\n[DISTILL_REQUEST]');
+              console.log('Distillation prompt ready. Read the prompt file, process it with your LLM,');
+              console.log('save the LLM response to a file, then run:');
+              console.log('  node index.js distill --response-file=<path_to_llm_response>');
+              console.log('Prompt file: ' + dr.promptPath);
+              console.log('[/DISTILL_REQUEST]');
+            }
           }
         } catch (e) {
           console.warn('[Distiller] Init failed (non-fatal): ' + (e.message || e));
@@ -243,13 +245,38 @@ async function main() {
       console.error('[SOLIDIFY] Error:', error);
       process.exit(2);
     }
+  } else if (command === 'distill') {
+    const responseFileFlag = args.find(a => typeof a === 'string' && a.startsWith('--response-file='));
+    if (!responseFileFlag) {
+      console.error('Usage: node index.js distill --response-file=<path>');
+      process.exit(1);
+    }
+    const responseFilePath = responseFileFlag.slice('--response-file='.length);
+    try {
+      const responseText = fs.readFileSync(responseFilePath, 'utf8');
+      const { completeDistillation } = require('./src/gep/skillDistiller');
+      const result = completeDistillation(responseText);
+      if (result && result.ok) {
+        console.log('[Distiller] Gene produced: ' + result.gene.id);
+        console.log(JSON.stringify(result.gene, null, 2));
+      } else {
+        console.warn('[Distiller] Distillation did not produce a gene: ' + (result && result.reason || 'unknown'));
+      }
+      process.exit(result && result.ok ? 0 : 2);
+    } catch (error) {
+      console.error('[DISTILL] Error:', error);
+      process.exit(2);
+    }
+
   } else {
-    console.log(`Usage: node index.js [run|/evolve|solidify] [--loop]
+    console.log(`Usage: node index.js [run|/evolve|solidify|distill] [--loop]
   - solidify flags:
     - --dry-run
     - --no-rollback
     - --intent=repair|optimize|innovate
-    - --summary=...`);
+    - --summary=...
+  - distill flags:
+    - --response-file=<path>  (LLM response file for skill distillation)`);
   }
 }
 
